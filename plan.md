@@ -345,6 +345,37 @@
 - **Gate 结论**：G0 验收通过（PASS）。
 - **通过标签**：`gate/g00-pass`
 
+### G1 验收记录
+
+- **基线标签**：`gate/g00-pass`
+- **当前分支**：`gate/g01-disassembly`
+- **基础提交**：`31154f8 docs(g00): complete G0 baseline verification, parallel gate topology, and G0_SUMMARY`
+- **工具链与 MCP 支撑**：
+  - `codebase-memory-mcp` 全仓索引完成，知识图谱建立 28,272 节点、146,761 关系边。
+  - 架构装配中心锁定：`src/wiring.ts` 经 `trace_path` 确认 180 处向外依赖倒置装配。
+  - 核心领域模型锁定：`src/types.ts` (`ScopeId`, `Principal`, `SessionState`) 经图检索确认 336 处扇入引用。
+- **实施与实测验证结果**：
+  1. **全仓文件门控归类（2,214 份）**：
+     - `G1_CONTROL`: 4 文件（`plan.md`, `AGENTS.md`, `CLAUDE.md`, `G0_SUMMARY.md`）
+     - `G2` (状态底座): 254 文件（Types, Config, ACL, Directory, Identity, Persistence 64 Migrations, Sessions, Files）
+     - `G3` (隔离执行面): 121 文件（Harness, Sandbox, Process, Tools, MicroVM Agent）
+     - `G4` (后台服务面): 179 文件（Memory, Skills, Cron, Connectors, Webhooks, Delivery）
+     - `G5` (核心总装): 207 文件（`wiring.ts`, `index.ts`, App, Router, Loops, Model Gateway）
+     - `G6` (交互 Surfaces): 612 文件（`plugins/web-ui`, `plugins/admin`, `plugins/portal`, `plugins/chassis`, `src/slack`）
+     - `G7` (运维与全仓补齐): 837 文件（CLI, Deploy, Cloud Providers, Scripts, Seed, Tests, Root Package Configs）
+  2. **导入类型多维解构**：
+     - 9,268 处 static 导入、1,782 处 type_only 导入、386 处 dynamic 导入、69 处 require、22 处 fs_read。
+  3. **强连通分量 (SCC) 环依赖求解**：
+     - 剥离纯类型引用后，全仓仅存在 3 组完全内聚的运行时环（G7 CLI 2文件、G6 Web-UI 21文件、G5 Model 2文件）。
+     - **证明全仓无任何跨门控运行时环，且 G3 (执行) 与 G4 (服务) 完全正交无运行时依赖，支持彻底解耦双轨并行**。
+  4. **交付物文档完备性**：
+     - 根目录生成标准文档：`G1_ARCHITECTURE.md`, `G1_CALL_CHAINS.md`, `G1_DEPENDENCY_GRAPH.md`, `G1_RESTORE_MANIFEST.md`, `G1_VERIFICATION_MATRIX.md`, `G1_SUMMARY.md`。
+     - 机器可读依赖索引：`g1_detailed_analysis.json`。
+  5. **拆除与恢复双向验证**：
+     - 所有待恢复上游文件均可通过 `git checkout gate/g00-pass -- <path>` 获得 100% 字节对齐恢复。
+- **Gate 结论**：G1 验收通过（PASS）。
+- **通过标签**：`gate/g01-pass`
+
 ## 8. 新对话启动口令
 
 在新的空白对话中使用：
