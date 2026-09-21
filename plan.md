@@ -2,7 +2,7 @@
 
 状态：已确认  
 项目：`qm-rebuild`  
-上游仓库：<https://github.com/yc-software/qm>  
+上游仓库：[https://github.com/yc-software/qm](https://github.com/yc-software/qm)  
 上游基线：`8ac53f7a523337266f5628406d30a23b71c2a2ff`
 
 ## 1. 目标
@@ -40,21 +40,58 @@
 
 阶段分支和通过标签如下：
 
-| Gate | 分支 | 通过标签 |
-|---|---|---|
-| G0 | `gate/g00-baseline` | `gate/g00-pass` |
-| G1 | `gate/g01-disassembly` | `gate/g01-pass` |
-| G2 | `gate/g02-foundation` | `gate/g02-pass` |
-| G3 | `gate/g03-execution` | `gate/g03-pass` |
-| G4 | `gate/g04-services` | `gate/g04-pass` |
-| G5 | `gate/g05-core` | `gate/g05-pass` |
-| G6 | `gate/g06-surfaces` | `gate/g06-pass` |
-| G7 | `gate/g07-complete` | `gate/g07-pass` |
-| G8 | `gate/g08-parity` | `gate/g08-pass` |
-| G9 | `gate/g09-usage` | `gate/g09-pass` |
-| G10 | `gate/g10-localization` | `gate/g10-pass` |
-| G11 | `gate/g11-branding` | `gate/g11-pass` |
-| G12 | `gate/g12-delivery` | `gate/g12-pass` |
+| Gate | 分支                    | 通过标签        | 依赖前置 | 并行分组说明                                                    |
+| ---- | ----------------------- | --------------- | -------- | --------------------------------------------------------------- |
+| G0   | `gate/g00-baseline`     | `gate/g00-pass` | 无       | 串行基线                                                        |
+| G1   | `gate/g01-disassembly`  | `gate/g01-pass` | G0       | 串行骨架                                                        |
+| G2   | `gate/g02-foundation`   | `gate/g02-pass` | G1       | 串行底座                                                        |
+| G3   | `gate/g03-execution`    | `gate/g03-pass` | G2       | ⚡ **可与 G4 并行**（执行隔离层：Harness/Sandbox/Tools）        |
+| G4   | `gate/g04-services`     | `gate/g04-pass` | G2       | ⚡ **可与 G3 并行**（支撑服务层：Memory/Skills/Cron）           |
+| G5   | `gate/g05-core`         | `gate/g05-pass` | G3, G4   | 串行汇聚（Core HTTP 总装）                                      |
+| G6   | `gate/g06-surfaces`     | `gate/g06-pass` | G5       | ⚡ **内部各 Surface 可并行**（Web-UI / Admin / Portal / Slack） |
+| G7   | `gate/g07-complete`     | `gate/g07-pass` | G5, G6   | 全仓补齐                                                        |
+| G8   | `gate/g08-parity`       | `gate/g08-pass` | G7       | 串行质量卡点（1:1 原样复原验收）                                |
+| G9   | `gate/g09-usage`        | `gate/g09-pass` | G8       | ⚡ **可与 G10, G11 并行**（业务系统接入与调用实验）             |
+| G10  | `gate/g10-localization` | `gate/g10-pass` | G8       | ⚡ **可与 G9, G11 并行**（Web/Admin/Portal 汉化与国际化）       |
+| G11  | `gate/g11-branding`     | `gate/g11-pass` | G8       | ⚡ **可与 G9, G10 并行**（品牌 Logo 与 CSS 主题换皮）           |
+| G12  | `gate/g12-delivery`     | `gate/g12-pass` | G8-G11   | 最终交付汇总                                                    |
+
+### 4.1 阶段并行执行拓扑图
+
+```text
+[G0 原版基线]
+     │
+     ▼
+[G1 拆解地图]
+     │
+     ▼
+[G2 状态底座]
+     │
+     ├───────────────────────┐
+     ▼                       ▼
+[G3 隔离执行面] ⚡并行⚡ [G4 后台服务面]
+     │                       │
+     └───────────┬───────────┘
+                 ▼
+          [G5 Agent核心总装]
+                 │
+                 ▼
+          [G6 交互Surfaces] (Web UI / Admin / Portal / Slack 可子并行)
+                 │
+                 ▼
+          [G7 全仓完整恢复]
+                 │
+                 ▼
+          [G8 原样等价验收] ── 质量基准冻结
+                 │
+     ┌───────────┼───────────┐
+     ▼           ▼           ▼
+[G9 接入实验] ⚡ [G10 汉化] ⚡ [G11 换皮] ── 三者完全正交，全并行推进
+     │           │           │
+     └───────────┼───────────┘
+                 ▼
+          [G12 最终交付]
+```
 
 执行规则：
 
@@ -276,6 +313,38 @@
 
 尚未执行的阶段不得提前记录为通过。
 
+### G0 验收记录
+
+- **基线版本**：上游基线 `8ac53f7a523337266f5628406d30a23b71c2a2ff`
+- **当前分支**：`gate/g00-baseline`
+- **基础提交**：`d3bf8d8 feat(g00): import baseline upstream tree at 8ac53f7a` (2,212 文件完整导入)
+- **环境确认**：
+  - Node.js: `v24.18.0` (满足 `>=24.15.0`)
+  - npm: `11.10.1` (满足 `>=11.10.0`)
+  - Docker Desktop: `v29.7.2` (WSL2 Linux 容器引擎在线)
+  - 依赖安装: Root / `plugins/admin` / `plugins/web-ui` 的锁定依赖已全部就绪
+- **实测验证项及结果**：
+  1. **Connector SDK 构建**：`npm run build:connector-sdk` 成功生成 `.generated/connector-sdk/sdk.cjs`。
+  2. **本地沙箱执行 (`scripts/local-sandbox-smoke.ts`)**：
+     - Provision #1: 成功拉起 `qm-sandbox-local:latest` 容器与持久化 Volume (`coldStart: true`)。
+     - 隔离执行: 成功在沙箱内执行命令 (`x86_64 | v24.21.0 | root`)。
+     - 持久化保持: 写入 `notes/marker.txt`，Teardown (park/stop) 后通过 Provision #2 Warm 重启，文件完整复现并确认容器主体复用。
+     - Scratch 临时沙箱: 独立隔离与清理通过。
+     - 结论: `=== ALL LIVE ASSERTIONS PASSED ===`。
+  3. **Postgres 状态存储**：
+     - 容器 `qm-dev-postgres` 运行于 `127.0.0.1:55432`。
+     - 数据库 `qm_dev_17c43fbe33e1` 成功执行全部 64 项 migrations，包含 `acl_grants`, `deliveries`, `directory_members`, `mcp_servers`, `memory_revisions`, `qm_schema_migrations` 等全部 65 张核心表。
+  4. **真实模型连接**：
+     - 接入智谱 GLM API (`https://open.bigmodel.cn/api/paas/v4/chat/completions`)，以 `glm-4-flash` 实测完成单轮 Chat 问答闭环 (HTTP 200，成功返回回复)。
+  5. **Web UI 与 Admin 入口**：
+     - `plugins/web-ui` 生产构建成功 (`vite build` 生成 `dist-web`，包含 35 个预压缩资源)。
+     - `plugins/admin` 单元与集成测试 154 项通过；权限隔离、CSRF/Actor 身份传递验证正确。
+- **未验证项及标记**：
+  - Slack Managed/Socket 真实工作区连接：缺少真实 Slack App/Bot Token，标记为“本地契约验证通过，外部工作区未实测”。
+  - AWS/Porter/Modal 远端沙箱：生产云凭据未配置，标记为“远端未实测，本地 Docker 沙箱全体验证通过”。
+- **Gate 结论**：G0 验收通过（PASS）。
+- **通过标签**：`gate/g00-pass`
+
 ## 8. 新对话启动口令
 
 在新的空白对话中使用：
@@ -287,3 +356,36 @@
 ```
 
 后续只需把 `G0` 替换为 `G1`、`G2` 等目标阶段。
+
+已知资源
+
+```
+curl --location 'https://open.bigmodel.cn/api/paas/v4/chat/completions' \
+--header 'Authorization: Bearer YOUR_API_KEY' \
+--header 'Content-Type: application/json' \
+--data '{
+    "model": "glm-5.3",
+    "messages": [
+        {
+            "role": "user",
+            "content": "你好"
+        }
+    ]
+}'
+
+GLM-4.7-Flash
+
+b21cc797fb5e43409d4868323c918560.MKuF1YXBqtJXlEUU
+```
+
+远程服务器
+
+```
+购买的域名: swwdemo.asia
+
+
+186.244.238.113
+root
+1vsItDhN5s58
+
+```
