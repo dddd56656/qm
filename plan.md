@@ -376,6 +376,35 @@
 - **Gate 结论**：G1 验收通过（PASS）。
 - **通过标签**：`gate/g01-pass`
 
+### G2 验收记录
+
+- **基线标签**：`gate/g01-pass`
+- **当前分支**：`gate/g02-foundation`
+- **基础提交**：快进合并自 `245892d`
+- **环境与数据库确认**：
+  - Node.js: `v24.18.0` (满足 `>=24.15.0`)
+  - npm: `11.10.1` (满足 `>=11.10.0`)
+  - PostgreSQL: 容器 `qm-dev-postgres` 在线运行于 `127.0.0.1:55432` (`qm_dev_17c43fbe33e1`)
+  - 模式迁移: 执行 `npm run migrate`，成功应用并记录 155 项 migrations，136 张核心业务表就绪
+- **实测验证项及结果**：
+  1. **底座文件完整恢复（254 文件）**：
+     - 从 `gate/g00-pass` 完整恢复核心类型、配置、ACL、Admin、Audit、Auth、Directory、Identity、Policy、Security、Resolution、Persistence、Sessions、Runs、Workspace、Files、Idempotency、Environments、Deployment、Util 等全量 254 个文件，零简化 mock 或假实现。
+     - 恢复并构建 Connector SDK，生成 `.generated/connector-sdk/sdk.cjs` 满足 `pretest` 契约。
+     - 依据依赖闭包原则恢复基础通信支撑 `plugins/chassis` 及相关叶子类型，保证模块解析闭合。
+  2. **身份与作用域模型验证**：
+     - `ScopeId` 强类型前缀与层级解析全量通过。
+     - Principal 多租户 ACL 权限判定、CAS 条件更新与目录多工作区原子快照置换通过（`test/acl-*`, `test/identity.test.ts`, `test/directory-store.test.ts`, `test/resolution.test.ts` 全部通过）。
+  3. **会话状态机与租约抢占验证**：
+     - 单调递增序列号 (`seq`)、会话可见性窗口 `[valid_from, valid_to)` 与 overheard 旁路消息隔离通过。
+     - Leader Lease 锁争抢、心跳续约与 Reaper 强制接管通过（`test/leader-lease.test.ts`, `test/session-store.test.ts`, `test/session-syscalls.test.ts`, `test/session-state-bus.test.ts` 全部通过）。
+  4. **PostgreSQL 持久化全量实测**：
+     - 包含 Admin Grants, Directory Store, Audit Log, Error Log, Metrics Sink, Migrations, Listener, Run Activity, Run Stream, File Artifact, File Upload, Config Store 等 28 个核心测试套件在真实 Postgres 实例下全部通过（261 passed, 0 failed, 0 skipped）。
+- **交付物文档**：
+  - 根目录生成 `G2_SUMMARY.md`。
+  - 数据库模式迁移脚本 `scripts/migrate.mjs` 及 `package.json` `"migrate"` 命令。
+- **Gate 结论**：G2 验收通过（PASS）。
+- **通过标签**：`gate/g02-pass`
+
 ## 8. 新对话启动口令
 
 在新的空白对话中使用：
