@@ -77,9 +77,7 @@ export interface Config {
   codexModel?: string;
   codexBinPath?: string;
   codexAuthFile?: string;
-  /** Keychain credential id holding the Codex ChatGPT OAuth auth.json (production path). */
   codexAuthCredential?: string;
-  /** Keychain credential id holding a Claude Code subscription token (production path). */
   claudeAuthCredential?: string;
   codexProcessEnv: NodeJS.ProcessEnv;
   claudeModel?: string;

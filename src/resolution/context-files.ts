@@ -11,14 +11,10 @@ async function readGrantedArtifactBytes(
 ): Promise<Buffer | null> {
   if (!files) return null;
   const rows = await files.resolveByOwnerPaths([{ ownerScopeId, path: ownerPath }]);
-  // Re-assert the tuple: the (owner_scope_id, path) index isn't unique and
-  // neither implementation orders results.
   const row = rows.find((r) => r.ownerScopeId === ownerScopeId && r.path === ownerPath);
   if (!row) return null;
   const opened = await files.open(row.id);
   if (!opened) return null;
-  // The advertised size can be absent on some backends (fails open at 0), so
-  // the collector enforces the cap on actual bytes read.
   if (opened.sizeBytes > MAX_SHARED_ARTIFACT_BYTES) {
     opened.stream.destroy();
     throw new Error(
@@ -54,7 +50,6 @@ export async function readContextFile(
   if (distinct.size > 1)
     return { error: `ERROR: ambiguous shared handle "${path}" maps to ${distinct.size} different files` };
   const grant = matches[0]!;
-  // Artifact and workspace namespaces must not shadow each other with stale snapshots.
   const bytes = isArtifactPath(grant.ownerPath)
     ? await readGrantedArtifactBytes(files, grant.ownerScopeId, grant.ownerPath)
     : await workspace.readBytes(grant.ownerScopeId, grant.ownerPath);

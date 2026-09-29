@@ -33,7 +33,7 @@ export interface FakeModal {
 }
 
 export function installFakeModal(opts: { native?: boolean } = {}): FakeModal {
-  const root = mkdtempSync(join(tmpdir(), "fake-modal-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-modal-")).replace(/\\/g, "/");
   const records = new Map<string, FakeRecord>();
   const execScripts: string[] = [];
   let nextId = 1;
@@ -52,6 +52,7 @@ export function installFakeModal(opts: { native?: boolean } = {}): FakeModal {
       `export HOME=${JSON.stringify(r.home)}; ` +
       script
         .replace(/\btimeout \d+ /g, "")
+        .replace(/\btar /g, process.platform === "win32" ? "tar --force-local " : "tar ")
         .replace(/\/root(?![A-Za-z0-9_-])/g, r.home)
         .replace(remapPath, (mm) => (mm.startsWith(r.home) ? mm : `${r.home}/tmp/`))
     );
@@ -86,10 +87,19 @@ export function installFakeModal(opts: { native?: boolean } = {}): FakeModal {
       alive(r);
       execScripts.push(command);
       mkdirSync(join(r.home, "tmp"), { recursive: true });
-      const spawned = spawnSync("sh", ["-c", remap(r, command)], {
+      const input = Buffer.from(remap(r, command), "utf8");
+      const spawned = spawnSync("sh", ["-s"], {
+        input,
         encoding: "buffer",
         maxBuffer: 128 * 1024 * 1024,
-        env: { ...process.env, COPYFILE_DISABLE: "1" },
+        env: {
+          ...process.env,
+          ...(process.platform === "win32"
+            ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+            : {}),
+          COPYFILE_DISABLE: "1",
+          MSYS: "winsymlinks:nativestrict",
+        },
       });
       return {
         stdout: (spawned.stdout ?? Buffer.alloc(0)).toString("utf8"),
@@ -132,7 +142,7 @@ export function installFakeModal(opts: { native?: boolean } = {}): FakeModal {
         sandboxId: id,
         ...(opts.name ? { name: opts.name } : {}),
         state: "running",
-        home: join(root, id),
+        home: join(root, id).replace(/\\/g, "/"),
         createdAt: ++clock,
       };
       mkdirSync(r.home, { recursive: true });

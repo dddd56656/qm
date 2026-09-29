@@ -43,7 +43,7 @@ export const FAKE_AGENT37_API_KEY = "sk_live_test_key";
 const OUTPUT_CAP = 512 * 1024;
 
 export function installFakeAgent37(): FakeAgent37 {
-  const root = mkdtempSync(join(tmpdir(), "fake-a37-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-a37-")).replace(/\\/g, "/");
   const instances = new Map<string, FakeInstance>();
   const execScripts: string[] = [];
   const calls: Agent37Call[] = [];
@@ -66,7 +66,7 @@ export function installFakeAgent37(): FakeAgent37 {
       ...(body.template ? { template: body.template } : {}),
       ...(body.auto_sleep !== undefined ? { autoSleep: body.auto_sleep } : {}),
       ...(body.resources ? { resources: body.resources } : {}),
-      home: join(root, id),
+      home: join(root, id).replace(/\\/g, "/"),
     };
     mkdirSync(m.home, { recursive: true });
     instances.set(id, m);
@@ -93,10 +93,19 @@ export function installFakeAgent37(): FakeAgent37 {
   const runExec = (m: FakeInstance, script: string): Response => {
     execScripts.push(script);
     mkdirSync(join(m.home, "tmp"), { recursive: true });
-    const r = spawnSync("sh", ["-c", remap(m, script)], {
+    const input = Buffer.from(remap(m, script), "utf8");
+    const r = spawnSync("sh", ["-s"], {
+      input,
       encoding: "buffer",
       maxBuffer: 128 * 1024 * 1024,
-      env: { ...process.env, COPYFILE_DISABLE: "1" },
+      env: {
+        ...process.env,
+        ...(process.platform === "win32"
+          ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+          : {}),
+        COPYFILE_DISABLE: "1",
+        MSYS: "winsymlinks:nativestrict",
+      },
     });
     const code = r.status ?? (r.signal ? 137 : -1);
     const stdout = (r.stdout ?? Buffer.alloc(0)).toString("utf8");

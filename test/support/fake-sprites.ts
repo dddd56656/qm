@@ -36,11 +36,10 @@ export interface FakeSprites {
   cleanup(): void;
 }
 
-const TOKEN = "test-token";
 const API_ORIGIN = "https://api.sprites.dev";
-
+const TOKEN = "test-token";
 export function installFakeSprites(): FakeSprites {
-  const root = mkdtempSync(join(tmpdir(), "fake-sprites-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-sprites-")).replace(/\\/g, "/");
   const sprites = new Map<string, { home: string }>();
   const policies = new Map<string, NetworkRule[]>();
   const execScripts: string[] = [];
@@ -54,7 +53,7 @@ export function installFakeSprites(): FakeSprites {
   const ensureDir = (name: string): string => {
     let s = sprites.get(name);
     if (!s) {
-      s = { home: join(root, name) };
+      s = { home: join(root, name).replace(/\\/g, "/") };
       mkdirSync(s.home, { recursive: true });
       sprites.set(name, s);
     }
@@ -70,6 +69,7 @@ export function installFakeSprites(): FakeSprites {
       script
         .replace(/\btimeout \d+ /g, "")
         .replace(/\bsha256sum -c --status\b/g, "shasum -a 256 -c --status")
+        .replace(/\btar /g, process.platform === "win32" ? "tar --force-local " : "tar ")
         .replace(/\/proc\/pressure\/io/g, `${home}/.proc-pressure-io`)
         .replace(/\/proc\/loadavg/g, `${home}/.proc-loadavg`)
         .replace(/\/usr\/local/g, `${home}/.usr-local`)
@@ -91,7 +91,14 @@ export function installFakeSprites(): FakeSprites {
     const r = spawnSync("sh", ["-c", viaBody ? SCRIPT_RUNNER : remap(name, script)], {
       encoding: "buffer",
       maxBuffer: 128 * 1024 * 1024,
-      env: { ...process.env, COPYFILE_DISABLE: "1" },
+      env: {
+        ...process.env,
+        ...(process.platform === "win32"
+          ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+          : {}),
+        COPYFILE_DISABLE: "1",
+        MSYS: "winsymlinks:nativestrict",
+      },
       ...(input ? { input } : {}),
     });
     const code = r.status ?? (r.signal ? 137 : -1);

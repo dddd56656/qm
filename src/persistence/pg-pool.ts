@@ -296,17 +296,6 @@ export async function applyPgMigrations(pool: Pool, migrations: readonly PgMigra
   }
 }
 
-/**
- * Extra root-CA trust for the Postgres connection, with full verification
- * semantics kept. Managed providers (Supabase's pooler, RDS, …) often pin a
- * private root the container's trust store doesn't carry; without a supported
- * way to add it, operators were left choosing between sslmode=no-verify and
- * forking the image. DATABASE_CA_CERT carries PEM content (a secret-store
- * value); DATABASE_CA_CERT_FILE points at a mounted file. Parsed once at the
- * process boundary (config.ts / a script's own env read), installed here, and
- * applied to every pg pool and client this process opens — database CA trust
- * is inherently process-global, like NODE_EXTRA_CA_CERTS.
- */
 export function resolvePgCaTrust(opts: { cert?: string; certFile?: string }): { ssl?: { ca: string } } {
   if (opts.cert?.trim()) return { ssl: { ca: opts.cert } };
   if (opts.certFile?.trim()) {

@@ -70,7 +70,7 @@ function isCodexOAuthAuth(value: unknown): value is JsonObject {
 
 export function readCodexOAuthAuthFile(path: string): JsonObject | null {
   try {
-    if (statSync(path).mode & 0o077) return null;
+    if (process.platform !== "win32" && (statSync(path).mode & 0o077)) return null;
   } catch {
     return null;
   }

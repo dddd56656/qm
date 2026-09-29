@@ -195,4 +195,262 @@
     * **依赖内容**：依赖各存储模块的创建函数与 `src/persistence/pg-pool.ts`。
 
 ---
-*(后续 Gate 3、Gate 4... 推进完成后，均在本文档末尾继续向下追加编写)*
+---
+
+# Gate 3：沙箱隔离、代码执行与模型网关面 (G3 交付全景)
+
+### 1. 沙箱核心抽象与本地 Docker 执行环境 (`src/sandbox/`)
+* **核心功能**：沙箱统一生命周期契约、容器挂载持久化（guestHome）、命令派发与环境安全清洗。
+* **对应目录与文件**：
+  * **`src/sandbox/sandbox.ts`**
+    * **文件功能**：定义沙箱核心统一契约接口（`SandboxEnvironment`, `SandboxProcess`, `ExecResult`），规范所有沙箱厂商的生命周期。
+    * **依赖内容**：依赖 `src/types.ts`（基础类型与作用域定义）。
+  * **`src/sandbox/local-sandbox.ts`**
+    * **文件功能**：本地 Docker 沙箱容器管理，支持卷挂载持久化目录（guestHome）、容器启停、命令执行与端口绑定。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/sandbox/docker-exec.ts`、`src/sandbox/sandbox-env.ts`。
+  * **`src/sandbox/docker-exec.ts`**
+    * **文件功能**：封装 Docker API 执行流，处理容器内进程双向输入输出管道。
+    * **依赖内容**：依赖 `node:child_process`。
+  * **`src/sandbox/sandbox-env.ts`**
+    * **文件功能**：沙箱环境变量安全清洗、脱敏与安全注入（含代理与认证凭证）。
+    * **依赖内容**：依赖 `src/config.ts`。
+  * **`src/sandbox/sandbox-routing.ts`**
+    * **文件功能**：动态沙箱运行时路由，根据 ScopeId、租户策略与资源配额决策底层沙箱实现。
+    * **依赖内容**：依赖 `src/types.ts`、`src/sandbox/sandbox.ts`。
+  * **`src/sandbox/sandbox-resources.ts`**
+    * **文件功能**：沙箱计算资源配置与限制校验（CPU、内存配额控制）。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+  * **`src/sandbox/sandbox-destroy-scope.ts`**
+    * **文件功能**：作用域级别沙箱资源批量安全销毁与清理逻辑。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/types.ts`。
+  * **`src/sandbox/layer-tool-install.ts`**
+    * **文件功能**：只读层外部工具包注入与安装流编排。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/sandbox/tar.ts`。
+  * **`src/sandbox/ro-layers.ts`**
+    * **文件功能**：管理沙箱只读镜像层及跨会话工具文件系统缓存。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+  * **`src/sandbox/tar.ts`**
+    * **文件功能**：内存流式 Tar 归档与解包工具，用于沙箱文件跨网络高效传输。
+    * **依赖内容**：依赖 `tar-stream`。
+  * **`src/sandbox/exec-file-ops.ts`**
+    * **文件功能**：沙箱内跨平台文件操作（读写、存在性检查、SHA-256 校验与文件检索）。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+
+---
+
+### 2. 外部多云算力沙箱生态适配 (`src/sandbox/`)
+* **核心功能**：无缝对接主流云端沙箱与高性能 Serverless 容器执行环境。
+* **对应目录与文件**：
+  * **`src/sandbox/aws-sandbox.ts`**
+    * **文件功能**：AWS ECS/MicroVM 轻量虚拟化微容器沙箱驱动。
+    * **依赖内容**：依赖 `src/sandbox/aws-microvm-api.ts`、`src/sandbox/sandbox.ts`。
+  * **`src/sandbox/aws-microvm-api.ts`**
+    * **文件功能**：AWS MicroVM 控制平面底层 HTTP 客户端通信库。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/sandbox/sprites-sandbox.ts`**
+    * **文件功能**：Sprites 微虚拟机秒级启动驱动与双工网络安全隔离。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/sandbox/exec-sandbox-base.ts`。
+  * **`src/sandbox/e2b-sandbox.ts`**
+    * **文件功能**：E2B 云端长连接代码执行沙箱驱动。
+    * **依赖内容**：依赖 `src/sandbox/e2b-client.ts`、`src/sandbox/sandbox.ts`。
+  * **`src/sandbox/e2b-client.ts`**
+    * **文件功能**：E2B API 与流式事件通信协议封装。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/sandbox/modal-sandbox.ts`**
+    * **文件功能**：Modal Serverless 高性能算力沙箱驱动与远程任务调度。
+    * **依赖内容**：依赖 `src/sandbox/modal-client.ts`、`src/sandbox/modal-image.ts`。
+  * **`src/sandbox/modal-client.ts`**
+    * **文件功能**：Modal 服务端通信客户端与状态监听。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/sandbox/modal-image.ts`**
+    * **文件功能**：Modal 镜像定义与远程自动化构建器。
+    * **依赖内容**：无外部依赖。
+  * **`src/sandbox/porter-sandbox.ts`**
+    * **文件功能**：Porter 容器化集群沙箱编排与管理驱动。
+    * **依赖内容**：依赖 `src/sandbox/porter-client.ts`、`src/sandbox/sandbox.ts`。
+  * **`src/sandbox/porter-client.ts`**
+    * **文件功能**：Porter 控制面 API 客户端。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/sandbox/superserve-sandbox.ts`**
+    * **文件功能**：Superserve 专用算力沙箱驱动。
+    * **依赖内容**：依赖 `src/sandbox/superserve-client.ts`、`src/sandbox/sandbox.ts`。
+  * **`src/sandbox/superserve-client.ts`**
+    * **文件功能**：Superserve 通信协议客户端。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/sandbox/smolmachines-sandbox.ts`**
+    * **文件功能**：Smolmachines 轻量级微虚拟机沙箱驱动。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+  * **`src/sandbox/agent37-sandbox.ts`**
+    * **文件功能**：Agent37 专用微容器沙箱驱动。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+  * **`src/sandbox/sandbox-migrate.ts`**
+    * **文件功能**：沙箱跨主机持久化数据迁移状态机。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+  * **`src/sandbox/sandbox-migration-runner.ts`**
+    * **文件功能**：沙箱迁移执行调度引擎。
+    * **依赖内容**：依赖 `src/sandbox/sandbox-migrate.ts`。
+
+---
+
+### 3. 长程会话与持久化进程池 (`src/processes/` & `src/sandbox/`)
+* **核心功能**：交互式命令行 Session 状态机、长连接双工管道、存活心跳探针与僵尸进程回收。
+* **对应目录与文件**：
+  * **`src/sandbox/exec-process-session.ts`**
+    * **文件功能**：交互式终端 Process Session 会话管理器，支持 PTY、长连接管道与并发输入输出。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/util/async.ts`。
+  * **`src/sandbox/process-poll.ts`**
+    * **文件功能**：进程状态轮询与存活心跳探针。
+    * **依赖内容**：依赖 `src/util/async.ts`。
+  * **`src/processes/process-registry.ts`**
+    * **文件功能**：分布式后台进程注册表与元数据持久化。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/processes/process-reaper.ts`**
+    * **文件功能**：僵尸进程孤儿回收器与超时强制截断。
+    * **依赖内容**：依赖 `src/processes/process-registry.ts`。
+  * **`src/processes/reconcile.ts`**
+    * **文件功能**：进程状态调和器，同步容器生命周期与数据库状态。
+    * **依赖内容**：依赖 `src/processes/process-registry.ts`。
+  * **`src/sandbox/await-process-exit.ts`**
+    * **文件功能**：异步等待进程终结与状态退出码捕获。
+    * **依赖内容**：无外部依赖。
+  * **`src/sandbox/exec-kill.ts`**
+    * **文件功能**：进程树强制终结与跨平台信号发送。
+    * **依赖内容**：依赖 `node:child_process`。
+
+---
+
+### 4. 统一模型接入网关与凭证体系 (`src/model/`)
+* **核心功能**：统一模型接入网关、多厂商端点覆盖配置、自定义 Provider 动态注册与账号凭据隔离。
+* **对应目录与文件**：
+  * **`src/model/gateway-models.ts`**
+    * **文件功能**：模型网关支持的已知模型定义与能力元数据。
+    * **依赖内容**：无外部依赖。
+  * **`src/model/provider-endpoints.ts`**
+    * **文件功能**：集中式模型提供商基础端点解析与覆盖配置。
+    * **依赖内容**：依赖 `src/model/gateway-models.ts`。
+  * **`src/model/custom-providers.ts`**
+    * **文件功能**：管理员动态自定义 Provider 注册与配置解析。
+    * **依赖内容**：依赖 `src/config.ts`。
+  * **`src/model/custom-provider-store.ts`**
+    * **文件功能**：自定义模型提供商持久化存储。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/model/user-model-credential-store.ts`**
+    * **文件功能**：用户私有模型凭据与账号隔离存储。
+    * **依赖内容**：依赖 `src/credentials/keychain.ts`。
+  * **`src/model/model-catalog.ts`**
+    * **文件功能**：模型目录元数据汇总与模型能力分类。
+    * **依赖内容**：依赖 `src/model/gateway-models.ts`。
+  * **`src/model/model-gateway.ts`**
+    * **文件功能**：集中式模型网关请求路由与签名代理。
+    * **依赖内容**：依赖 `src/model/provider-endpoints.ts`。
+  * **`src/model/codex-device-login.ts`**
+    * **文件功能**：OpenAI ChatGPT 订阅设备码 OAuth 授权流交互。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+
+---
+
+### 5. 多框架智能体运行时 Harness 体系 (`src/harness/`)
+* **核心功能**：统一 Harness 契约、Pi/Claude/Codex/OpenCode 多模型引擎原生适配、转录磁带顺序落地与思考深度控制。
+* **对应目录与文件**：
+  * **`src/harness/harness.ts`**
+    * **文件功能**：定义统一 Harness 顶层接口契约（`runTurn`, `detectTurn`, `compactHistory`）。
+    * **依赖内容**：依赖 `src/types.ts`、`src/sessions/session-store.ts`。
+  * **`src/harness/pi-harness.ts`**
+    * **文件功能**：核心 Pi 架构智能体运行时，支持思考深度控制、快速模式计费、步骤间隙归因、空响应自愈与转录磁带流式顺序落地。
+    * **依赖内容**：依赖 `src/harness/harness.ts`、`src/model/pi-models.ts`、`src/harness/agent-tools.ts`。
+  * **`src/harness/claude-harness.ts`**
+    * **文件功能**：原生 Anthropic Claude Agent SDK 适配层。
+    * **依赖内容**：依赖 `src/harness/harness.ts`、`@anthropic-ai/claude-agent-sdk`。
+  * **`src/harness/codex-harness.ts`**
+    * **文件功能**：OpenAI Codex 双工 App-Server 运行时适配器。
+    * **依赖内容**：依赖 `src/harness/harness.ts`、`src/harness/codex-app-server.ts`、`src/harness/codex-auth-store.ts`。
+  * **`src/harness/codex-app-server.ts`**
+    * **文件功能**：Codex app-server 子进程生命周期与 JSON-RPC 通信管理。
+    * **依赖内容**：依赖 `node:child_process`、`src/util/errors.ts`。
+  * **`src/harness/codex-auth-store.ts`**
+    * **文件功能**：Codex ChatGPT 账号 OAuth 凭据轮转与原子持有存储。
+    * **依赖内容**：依赖 `src/credentials/keychain.ts`。
+  * **`src/harness/opencode-harness.ts`**
+    * **文件功能**：OpenCode 统一模型网关运行时适配器。
+    * **依赖内容**：依赖 `src/harness/harness.ts`、`@opencode-ai/sdk`。
+  * **`src/harness/mock-harness.ts`**
+    * **文件功能**：测试与离线模拟 Harness 运行时。
+    * **依赖内容**：依赖 `src/harness/harness.ts`。
+  * **`src/harness/harness-router.ts`**
+    * **文件功能**：跨 Harness 动态路由与多模型调度中心。
+    * **依赖内容**：依赖 `src/harness/harness.ts`。
+  * **`src/harness/agent-tools.ts`**
+    * **文件功能**：Agent 系统核心工具注册库（终端执行、文件读写、沙箱交互、搜索等）。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/types.ts`。
+  * **`src/harness/goal-tools.ts`**
+    * **文件功能**：目标驱动多轮自动循环执行工具。
+    * **依赖内容**：依赖 `src/harness/agent-tools.ts`。
+  * **`src/harness/replay.ts`**
+    * **文件功能**：会话转录磁带回放与历史上下文重建器。
+    * **依赖内容**：依赖 `src/sessions/session-store.ts`。
+  * **`src/harness/tape-fold.ts`**
+    * **文件功能**：转录磁带折叠与防陈旧修剪机制。
+    * **依赖内容**：依赖 `src/sessions/session-store.ts`。
+  * **`src/harness/tape-projection.ts`**
+    * **文件功能**：磁带到不同模型输入消息格式的投影视图。
+    * **依赖内容**：依赖 `src/sessions/session-store.ts`。
+  * **`src/harness/runtime-control.ts`**
+    * **文件功能**：运行时中途控制与外部干预信号处理。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/harness/runtime-recovery.ts`**
+    * **文件功能**：运行时崩溃后自动拉起与状态恢复。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 6. MCP (Model Context Protocol) 插件客户端与工具服务 (`src/mcp/`)
+* **核心功能**：通用 Model Context Protocol 客户端连接、服务动态发现与模型工具注入。
+* **对应目录与文件**：
+  * **`src/mcp/mcp-client.ts`**
+    * **文件功能**：基于 HTTP/SSE 的通用 Model Context Protocol 客户端实现。
+    * **依赖内容**：依赖 `node:http`、`src/util/errors.ts`。
+  * **`src/mcp/mcp-server-store.ts`**
+    * **文件功能**：管理员配置的 MCP 服务器注册表持久化存储。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/mcp/mcp-tool-service.ts`**
+    * **文件功能**：将 MCP 注册服务动态转换为带作用域命名空间的 Agent 可调用工具。
+    * **依赖内容**：依赖 `src/mcp/mcp-client.ts`、`src/mcp/mcp-server-store.ts`。
+
+---
+
+### 7. 限流、集群栅栏与任务流水线 (`src/ratelimit/`, `src/swarms/`, `src/tasks/`)
+* **核心功能**：分布式令牌桶限流、模型调用预算熔断、Swarm 多智能体集群防脑裂栅栏与任务排队。
+* **对应目录与文件**：
+  * **`src/ratelimit/rate-limiter.ts`**
+    * **文件功能**：令牌桶速率限制与模型调用并发预算控制抽象。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/ratelimit/postgres-rate-limiter.ts`**
+    * **文件功能**：基于 PostgreSQL 的分布式原子速率限制器。
+    * **依赖内容**：依赖 `src/ratelimit/rate-limiter.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/ratelimit/budget.ts`**
+    * **文件功能**：组织与个人模型调用开销预算管理。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/ratelimit/postgres-budget.ts`**
+    * **文件功能**：基于 PostgreSQL 的持久化预算追踪与熔断。
+    * **依赖内容**：依赖 `src/ratelimit/budget.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/swarms/swarm-store.ts`**
+    * **文件功能**：Swarm 智能体集群元数据与分布式成员管理。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/swarms/swarm-service.ts`**
+    * **文件功能**：Swarm 工作流协同与任务调度服务。
+    * **依赖内容**：依赖 `src/swarms/swarm-store.ts`。
+  * **`src/swarms/swarm-fence.ts`**
+    * **文件功能**：Swarm 分布式执行栅栏，防止工作节点脑裂或越权冲突。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/tasks/task-store.ts`**
+    * **文件功能**：异步持久化任务抽象契约。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/tasks/postgres-task-store.ts`**
+    * **文件功能**：PostgreSQL 驱动的任务队列与执行状态持久化。
+    * **依赖内容**：依赖 `src/tasks/task-store.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/tasks/memory-task-store.ts`**
+    * **文件功能**：内存态无持久化测试任务存储。
+    * **依赖内容**：依赖 `src/tasks/task-store.ts`。
+
+---
+*(后续 Gate 4、Gate 5... 推进完成后，均在本文档末尾继续向下追加编写)

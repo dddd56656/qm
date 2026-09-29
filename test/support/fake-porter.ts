@@ -56,7 +56,7 @@ const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 const pathRe = (guestPath: string): RegExp => new RegExp(`${escapeRe(guestPath)}(?![A-Za-z0-9._-])`, "g");
 
 export function installFakePorter(opts: FakePorterOptions = {}): FakePorter {
-  const root = mkdtempSync(join(tmpdir(), "fake-porter-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-porter-")).replace(/\\/g, "/");
   const volumes = new Map<string, { id: string; dir: string }>();
   const bodies = new Map<string, BodyRecord>();
   const execScripts: string[] = [];
@@ -152,8 +152,8 @@ export function installFakePorter(opts: FakePorterOptions = {}): FakePorter {
           mounts[guest] = vol.dir;
         }
         const homeVolumeId = spec.volume_mounts?.[GUEST_HOME];
-        const home = mounts[GUEST_HOME] ?? join(root, `${spec.name}-home`);
-        const app = join(root, `${spec.name}-app`);
+        const home = (mounts[GUEST_HOME] ?? join(root, `${spec.name}-home`)).replace(/\\/g, "/");
+        const app = join(root, `${spec.name}-app`).replace(/\\/g, "/");
         mkdirSync(home, { recursive: true });
         mkdirSync(app, { recursive: true });
         const exposed = spec.networking?.[0];
@@ -166,7 +166,7 @@ export function installFakePorter(opts: FakePorterOptions = {}): FakePorter {
           tags: { ...spec.tags, ...(homeVolumeId ? { "qm-volume-id": homeVolumeId } : {}) },
           home,
           app,
-          tmp: join(root, `${spec.name}-tmp`),
+          tmp: join(root, `${spec.name}-tmp`).replace(/\\/g, "/"),
           mounts,
           host,
           ...(spec.egress ? { egress: spec.egress.allowed_destinations } : {}),
@@ -206,9 +206,19 @@ export function installFakePorter(opts: FakePorterOptions = {}): FakePorter {
           const script = body.command[body.command.length - 1] ?? "";
           execScripts.push(script);
           mkdirSync(cur.tmp, { recursive: true });
-          const child = spawn("sh", ["-c", remap(cur, script)], {
-            env: { ...process.env, ...cur.env, COPYFILE_DISABLE: "1" },
+          const input = Buffer.from(remap(cur, script), "utf8");
+          const child = spawn("sh", ["-s"], {
+            env: {
+              ...process.env,
+              ...cur.env,
+              ...(process.platform === "win32"
+                ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+                : {}),
+              COPYFILE_DISABLE: "1",
+              MSYS: "winsymlinks:nativestrict",
+            },
           });
+          child.stdin.end(input);
           const stdout: Buffer[] = [];
           const stderr: Buffer[] = [];
           child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
@@ -230,7 +240,7 @@ export function installFakePorter(opts: FakePorterOptions = {}): FakePorter {
         const name = body.name ?? `vol-anon-${++volumeSeq}`;
         let v = volumes.get(name);
         if (!v) {
-          v = { id: `vol-${++volumeSeq}`, dir: join(root, `vol-${name}`) };
+          v = { id: `vol-${++volumeSeq}`, dir: join(root, `vol-${name}`).replace(/\\/g, "/") };
           mkdirSync(v.dir, { recursive: true });
           volumes.set(name, v);
         }

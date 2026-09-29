@@ -48,7 +48,7 @@ export interface FakeSuperserve {
 }
 
 export function installFakeSuperserve(): FakeSuperserve {
-  const root = mkdtempSync(join(tmpdir(), "fake-superserve-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-superserve-")).replace(/\\/g, "/");
   const records = new Map<string, FakeRecord>();
   const execScripts: string[] = [];
   const calls: string[] = [];
@@ -100,10 +100,19 @@ export function installFakeSuperserve(): FakeSuperserve {
       calls.push(`run:${r.id}`);
       execScripts.push(command);
       mkdirSync(join(r.home, "tmp"), { recursive: true });
-      const spawned = spawnSync("sh", ["-c", remap(r, command)], {
+      const input = Buffer.from(remap(r, command), "utf8");
+      const spawned = spawnSync("sh", ["-s"], {
+        input,
         encoding: "buffer",
         maxBuffer: 128 * 1024 * 1024,
-        env: { ...process.env, COPYFILE_DISABLE: "1" },
+        env: {
+          ...process.env,
+          ...(process.platform === "win32"
+            ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+            : {}),
+          COPYFILE_DISABLE: "1",
+          MSYS: "winsymlinks:nativestrict",
+        },
       });
       return {
         stdout: (spawned.stdout ?? Buffer.alloc(0)).toString("utf8"),
@@ -177,7 +186,7 @@ export function installFakeSuperserve(): FakeSuperserve {
         ...(opts.timeoutSeconds !== undefined ? { timeoutSeconds: opts.timeoutSeconds } : {}),
         ...(opts.autoDeleteSeconds !== undefined ? { autoDeleteSeconds: opts.autoDeleteSeconds } : {}),
         ...(opts.template ? { template: opts.template } : {}),
-        home: join(root, id),
+        home: join(root, id).replace(/\\/g, "/"),
         createdAt: ++clock,
         resumes: 0,
       };

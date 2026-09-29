@@ -565,9 +565,7 @@ export async function postWithVerify(
         try {
           const found = await findPostedByKey(client, args, idempotencyKey, verifyOldest);
           if (found) return { ...found, reused: true };
-        } catch {
-          /* verification is best-effort on this path */
-        }
+        } catch {}
         continue;
       }
       let found: { ts: string; channel: string } | undefined;

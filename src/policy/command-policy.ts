@@ -89,9 +89,6 @@ function stripWrittenHeredocs(command: string): string {
     /^([^\n]*)<<-?\s*(["']?)([A-Za-z_]\w*)\2([^\n]*)\n([\s\S]*?)^\s*\3\s*$/gm,
     (full, pre, quote, _delim, post, body) => {
       if (heredocRunsInterpreter(pre + post)) return full;
-      // The heredoc body is data (written to a file or fed to a non-interpreter
-      // command like cat/gh/jq), not something the shell executes. Keep only
-      // command substitutions, which DO execute when the delimiter is unquoted.
       if (quote) return "";
       const subs = (body as string).match(/\$\([^)]*\)|`[^`]*`/g);
       return subs ? subs.join(" ") : "";
@@ -101,8 +98,6 @@ function stripWrittenHeredocs(command: string): string {
 
 function heredocRunsInterpreter(commandLine: string): boolean {
   if (heredocRunsShell(commandLine)) return true;
-  // SQL clients and script interpreters execute their stdin, so a heredoc fed
-  // to them must stay visible to the rules (e.g. destructive SQL via psql).
   return /(?:^|[|;&]\s*)(?:\S*\/)?(?:psql|mysql|mariadb|sqlite3?|sqlcmd|python\d?(?:\.\d+)?|node|perl|ruby)\b/.test(
     commandLine,
   );
@@ -785,13 +780,6 @@ function executedShellPayloads(input: string): string[] {
   ];
 }
 
-/**
- * SQL clients whose command-line payloads are executable SQL. scannableCommand
- * empties quoted strings before rules run, so `psql -c "DROP TABLE users"`
- * scanned as `psql -c ""` and the destructive-SQL floor rule could never fire
- * on any spelling people actually type. Extract those payloads as their own
- * scan lines, the same way executed shell payloads are.
- */
 const SQL_CLIENT_SPECS: Record<string, { options: string[]; sqlPositionalsAfter?: number }> = {
   psql: { options: ["-c", "--command"] },
   pgcli: { options: ["-c", "--command"] },

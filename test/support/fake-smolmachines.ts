@@ -33,7 +33,7 @@ export interface FakeSmolmachines {
 export const FAKE_SMOLMACHINES_TOKEN = "test-token";
 
 export function installFakeSmolmachines(): FakeSmolmachines {
-  const root = mkdtempSync(join(tmpdir(), "fake-smol-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-smol-")).replace(/\\/g, "/");
   const machines = new Map<string, FakeMachine>();
   const execScripts: string[] = [];
   const calls: SmolCall[] = [];
@@ -49,7 +49,7 @@ export function installFakeSmolmachines(): FakeSmolmachines {
       state: "stopped",
       ephemeral,
       ...(resources ? { resources } : {}),
-      home: join(root, id),
+      home: join(root, id).replace(/\\/g, "/"),
     };
     mkdirSync(m.home, { recursive: true });
     machines.set(id, m);
@@ -63,6 +63,7 @@ export function installFakeSmolmachines(): FakeSmolmachines {
       `export HOME=${JSON.stringify(m.home)}; ` +
       script
         .replace(/\btimeout \d+ /g, "")
+        .replace(/\btar /g, process.platform === "win32" ? "tar --force-local " : "tar ")
         .replace(/\/root/g, m.home)
         .replace(remapPath, (mm) => (mm.startsWith(m.home) ? mm : `${m.home}/tmp/`))
     );
@@ -71,12 +72,42 @@ export function installFakeSmolmachines(): FakeSmolmachines {
   const runExec = (m: FakeMachine, script: string, stdinB64?: string): Response => {
     execScripts.push(script);
     mkdirSync(join(m.home, "tmp"), { recursive: true });
-    const r = spawnSync("sh", ["-c", remap(m, script)], {
-      encoding: "buffer",
-      maxBuffer: 128 * 1024 * 1024,
-      env: { ...process.env, COPYFILE_DISABLE: "1" },
-      ...(stdinB64 !== undefined ? { input: Buffer.from(stdinB64, "utf8") } : {}),
-    });
+    const fullScript = remap(m, script);
+    let r;
+    if (stdinB64 !== undefined) {
+      const scriptFile = join(m.home, "tmp", `_exec_${nextId++}.sh`);
+      writeFileSync(scriptFile, fullScript, "utf8");
+      r = spawnSync("sh", [scriptFile], {
+        input: Buffer.from(stdinB64, "utf8"),
+        encoding: "buffer",
+        maxBuffer: 128 * 1024 * 1024,
+        env: {
+          ...process.env,
+          ...(process.platform === "win32"
+            ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+            : {}),
+          COPYFILE_DISABLE: "1",
+          MSYS: "winsymlinks:nativestrict",
+        },
+      });
+      try {
+        rmSync(scriptFile);
+      } catch {}
+    } else {
+      r = spawnSync("sh", ["-s"], {
+        input: Buffer.from(fullScript, "utf8"),
+        encoding: "buffer",
+        maxBuffer: 128 * 1024 * 1024,
+        env: {
+          ...process.env,
+          ...(process.platform === "win32"
+            ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+            : {}),
+          COPYFILE_DISABLE: "1",
+          MSYS: "winsymlinks:nativestrict",
+        },
+      });
+    }
     const code = r.status ?? (r.signal ? 137 : -1);
     const cap = 1024 * 1024;
     const stdout = (r.stdout ?? Buffer.alloc(0)).toString("utf8");

@@ -56,7 +56,6 @@ export function contextMemory({ memory, scopes, actorId, onRead }: MemoryReaderI
   };
 }
 
-// A turn-local view, never a reusable capability or a cross-turn cache.
 export async function resolveTurnContext(input: ContextInput) {
   const { resolution, memoryPolicy, useMemory } = input;
   const sharingSources = await sharingSourcesForTurn({ ...input, posture: resolution.sharingPosture });

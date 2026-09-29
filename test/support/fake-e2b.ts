@@ -32,7 +32,7 @@ export interface FakeE2b {
 }
 
 export function installFakeE2b(): FakeE2b {
-  const root = mkdtempSync(join(tmpdir(), "fake-e2b-"));
+  const root = mkdtempSync(join(tmpdir(), "fake-e2b-")).replace(/\\/g, "/");
   const records = new Map<string, FakeRecord>();
   const execScripts: string[] = [];
   let nextId = 1;
@@ -50,6 +50,7 @@ export function installFakeE2b(): FakeE2b {
       `export HOME=${JSON.stringify(r.home)}; ` +
       script
         .replace(/\btimeout \d+ /g, "")
+        .replace(/\btar /g, process.platform === "win32" ? "tar --force-local " : "tar ")
         .replace(/\/home\/user/g, r.home)
         .replace(remapPath, (mm) => (mm.startsWith(r.home) ? mm : `${r.home}/tmp/`))
     );
@@ -70,10 +71,19 @@ export function installFakeE2b(): FakeE2b {
       alive(r);
       execScripts.push(command);
       mkdirSync(join(r.home, "tmp"), { recursive: true });
-      const spawned = spawnSync("sh", ["-c", remap(r, command)], {
+      const input = Buffer.from(remap(r, command), "utf8");
+      const spawned = spawnSync("sh", ["-s"], {
+        input,
         encoding: "buffer",
         maxBuffer: 128 * 1024 * 1024,
-        env: { ...process.env, COPYFILE_DISABLE: "1" },
+        env: {
+          ...process.env,
+          ...(process.platform === "win32"
+            ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+            : {}),
+          COPYFILE_DISABLE: "1",
+          MSYS: "winsymlinks:nativestrict",
+        },
       });
       return {
         stdout: (spawned.stdout ?? Buffer.alloc(0)).toString("utf8"),
@@ -112,7 +122,7 @@ export function installFakeE2b(): FakeE2b {
         expired: false,
         autoPause: opts.autoPause ?? false,
         metadata: opts.metadata,
-        home: join(root, id),
+        home: join(root, id).replace(/\\/g, "/"),
         createdAt: ++clock,
       };
       mkdirSync(r.home, { recursive: true });
