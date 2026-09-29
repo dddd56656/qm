@@ -12,8 +12,8 @@ import type { SandboxBackendName } from "../sandbox/sandbox-routing.ts";
 export const SWARM_LIMITS = {
   sweepBatch: 16,
   sweepConcurrency: 4,
-  reconcileMs: 30_000,
-  provisionMs: 10_000,
+  reconcileMs: process.platform === "win32" ? 180_000 : 30_000,
+  provisionMs: process.platform === "win32" ? 60_000 : 10_000,
 } as const;
 
 export interface SwarmMember {

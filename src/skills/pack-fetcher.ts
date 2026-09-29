@@ -73,7 +73,7 @@ async function validateRepoUrl(
   lookup: (host: string) => Promise<string[]>,
 ): Promise<ValidatedRepo> {
   if (typeof raw !== "string" || !raw.trim()) throw new Error("skill pack url is required");
-  if (allowLocalRepos && raw.startsWith("/")) return { url: raw, gitConfig: [] };
+  if (allowLocalRepos && (raw.startsWith("/") || /^[a-zA-Z]:[/\\]/.test(raw))) return { url: raw, gitConfig: [] };
   let url: URL;
   try {
     url = new URL(raw);

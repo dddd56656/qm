@@ -41,7 +41,7 @@ export async function installConnectorSdk(
 ): Promise<void> {
   if (!/^[a-f0-9]{64}$/.test(bundle.sha) || createHash("sha256").update(bundle.sdk).digest("hex") !== bundle.sha)
     throw new Error("Connector SDK bundle checksum mismatch");
-  const root = `${home}/.qm/composio`;
+  const root = `${home.replaceAll("\\", "/")}/.qm/composio`;
   const target = `${root}/${bundle.sha}`;
   const current = `${root}/current`;
   const nonce = randomUUID();
@@ -49,7 +49,7 @@ export async function installConnectorSdk(
   const baked = "/opt/qm/composio";
   const probe = (dir: string) => `printf '%s\\n' ${shq(`${bundle.sha}  ${dir}/sdk.cjs`)} | sha256sum -c --status`;
   const activate = (dir: string) =>
-    `node -e ${shq(`const fs = require('node:fs'); fs.symlinkSync(${JSON.stringify(dir)}, ${JSON.stringify(link)}); fs.renameSync(${JSON.stringify(link)}, ${JSON.stringify(current)});`)}`;
+    `node -e ${shq(`const fs = require('node:fs'); fs.symlinkSync(${JSON.stringify(dir)}, ${JSON.stringify(link)}); try { fs.rmSync(${JSON.stringify(current)}, { force: true, recursive: true }); } catch {} fs.renameSync(${JSON.stringify(link)}, ${JSON.stringify(current)});`)}`;
   const result = await io.exec(
     `mkdir -p ${shq(root)} && { if ${probe(current)}; then exit 0; fi; if ${probe(baked)}; then ${activate(baked)}; elif ${probe(target)}; then ${activate(target)}; else exit 44; fi; }`,
     60,

@@ -211,7 +211,7 @@ export function createScratchPromote(deps: ScratchPromoteDeps): { strategy: Memo
       }
       const cutoff = dateStr(now - LOG_RETENTION_DAYS * 86_400_000);
       for (const abs of await workspace.list(scopeId)) {
-        const rel = relative(workspace.scopeDir(scopeId), abs);
+        const rel = relative(workspace.scopeDir(scopeId), abs).replaceAll("\\", "/");
         const m = rel.match(/^memory\/log\/(\d{4}-\d\d-\d\d)\.md$/);
         if (m && m[1]! < cutoff) await workspace.remove(scopeId, rel);
       }

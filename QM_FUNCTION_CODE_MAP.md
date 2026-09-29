@@ -453,4 +453,275 @@
     * **依赖内容**：依赖 `src/tasks/task-store.ts`。
 
 ---
-*(后续 Gate 4、Gate 5... 推进完成后，均在本文档末尾继续向下追加编写)
+
+### 8. 智能记忆与知识检索系统 (`src/memory/`)
+* **核心功能**：Agent 长期记忆提取、多轮对话归纳（Consolidation）、Scratch 空间向持久层晋升、Markdown 笔记语法解析与 Postgres 向量实体检索。
+* **对应目录与文件**：
+  * **`src/memory/memory-service.ts`**
+    * **文件功能**：工作区 Markdown 记忆读写、历史版本管理与修订快照服务。
+    * **依赖内容**：依赖 `src/types.ts`、`src/workspace/workspace-store.ts`、`src/util/async.ts`、`src/memory/notebook.ts`。
+  * **`src/memory/postgres-memory-service.ts`**
+    * **文件功能**：基于 PostgreSQL 的记忆条目、向量检索与实体记忆持久化存储。
+    * **依赖内容**：依赖 `src/memory/memory-service.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/memory/notebook.ts`**
+    * **文件功能**：记忆 Markdown 笔记语法解析器与结构化行语法器。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/memory/strategy.ts`**
+    * **文件功能**：记忆提取策略接口定义与策略注册。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/memory/strategies/scratch-promote.ts`**
+    * **文件功能**：草稿与每日日志向核心长期记忆晋升策略。
+    * **依赖内容**：依赖 `src/memory/strategy.ts`、`src/memory/notebook.ts`。
+  * **`src/memory/strategies/consolidation.ts`**
+    * **文件功能**：多轮对话深层整合与记忆压缩策略。
+    * **依赖内容**：依赖 `src/memory/strategy.ts`、`src/memory/notebook.ts`。
+  * **`src/memory/strategies/agent-only.ts`**
+    * **文件功能**：仅由 Agent 显式调用维护的记忆提取策略。
+    * **依赖内容**：依赖 `src/memory/strategy.ts`。
+  * **`src/memory/strategies/per-turn.ts`**
+    * **文件功能**：单轮对话实时抽取与背景增量更新策略。
+    * **依赖内容**：依赖 `src/memory/strategy.ts`。
+  * **`src/memory/provider-router.ts`**
+    * **文件功能**：多记忆提供方（本地 Markdown、Postgres 向量、远程 MCP）动态路由。
+    * **依赖内容**：依赖 `src/memory/memory-service.ts`、`src/memory/provider-config.ts`。
+  * **`src/memory/mcp-memory-provider.ts`**
+    * **文件功能**：基于 Model Context Protocol 远程协议的外部记忆服务提供者。
+    * **依赖内容**：依赖 `src/memory/memory-service.ts`、`src/mcp/mcp-client.ts`。
+
+---
+
+### 9. 技能发现、打包、同步与沙箱物化体系 (`src/skills/`)
+* **核心功能**：技能包规范化解析、Git 仓库拉取、代码打包与归档、沙箱动态挂载物化、命名冲突探测与自动授权。
+* **对应目录与文件**：
+  * **`src/skills/skill-store.ts`**
+    * **文件功能**：技能注册表核心抽象契约与内存实现。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/skills/skill-pack-store.ts`**
+    * **文件功能**：技能包仓库元数据与持久化记录管理。
+    * **依赖内容**：依赖 `src/skills/skill-store.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/skills/skill-bundle-store.ts`**
+    * **文件功能**：打包后的技能 Bundle 缓存与版本哈希存储。
+    * **依赖内容**：依赖 `src/skills/skill-store.ts`。
+  * **`src/skills/pack-fetcher.ts`**
+    * **文件功能**：从远程 Git 仓库或本地文件目录拉取技能包代码。
+    * **依赖内容**：依赖 `src/util/shell.ts`、`src/util/errors.ts`。
+  * **`src/skills/skill-sync-engine.ts`**
+    * **文件功能**：定时同步远程技能仓库变更并更新本地注册表。
+    * **依赖内容**：依赖 `src/skills/skill-pack-store.ts`、`src/skills/pack-fetcher.ts`。
+  * **`src/skills/materialize.ts`**
+    * **文件功能**：将技能包动态注入并物化到沙箱环境的文件系统中。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`、`src/skills/skill-bundle-store.ts`。
+  * **`src/skills/frontmatter.ts`**
+    * **文件功能**：技能说明文档（SKILL.md）的 Frontmatter 元数据解析与校验。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/skills/skill-collision.ts`**
+    * **文件功能**：跨技能包指令同名冲突与优先级碰撞裁决。
+    * **依赖内容**：依赖 `src/skills/skill-name.ts`。
+  * **`src/skills/seed.ts`**
+    * **文件功能**：系统开箱即用的内置种子技能包加载器。
+    * **依赖内容**：依赖 `src/skills/skill-store.ts`。
+
+---
+
+### 10. 钥匙串、服务凭证与共享凭据安全代理 (`src/credentials/`)
+* **核心功能**：环境级与组织级敏感凭据加密保管、钥匙串交互式授权问询（Ask）、动态文件与环境变量注入、共享凭据断点恢复与调用审计下沉。
+* **对应目录与文件**：
+  * **`src/credentials/keychain.ts`**
+    * **文件功能**：钥匙串凭证统一管理、安全解密、作用域隔离与凭证注入。
+    * **依赖内容**：依赖 `src/config.ts`、`src/types.ts`、`src/connectors/connector-client-store.ts`、`src/util/errors.ts`。
+  * **`src/credentials/secret-drop.ts`**
+    * **文件功能**：一次性敏感凭证临时投递与自毁机制。
+    * **依赖内容**：依赖 `src/util/crypto.ts`。
+  * **`src/credentials/secret-source.ts`**
+    * **文件功能**：从环境变量、文件系统与远程配置源解析凭据来源。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/credentials/resident-auth.ts`**
+    * **文件功能**：沙箱内部常驻认证信息管理与安全隔离。
+    * **依赖内容**：依赖 `src/credentials/keychain.ts`。
+  * **`src/credentials/device-flow-cutover.ts`**
+    * **文件功能**：设备授权流（Device Authorization Flow）切流与凭证安全持久化。
+    * **依赖内容**：依赖 `src/credentials/keychain.ts`。
+  * **`src/credentials/harness-auth-env.ts`**
+    * **文件功能**：模型 Harness 执行时按需注入的认证环境变量组装器。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/credentials/postgres-credential-usage-sink.ts`**
+    * **文件功能**：基于 PostgreSQL 的敏感凭证使用审计日志异步落盘下沉。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+
+---
+
+### 11. 外部连接器与集成协议生态 (`src/connectors/`, `src/sandbox/connector-sdk.ts`)
+* **核心功能**：第三方外部系统连接器（Composio、自定义 BYO）、OAuth 鉴权状态机、客户端会话槽位映射与沙箱专用 SDK 自动分发。
+* **对应目录与文件**：
+  * **`src/connectors/connector-client-store.ts`**
+    * **文件功能**：连接器客户端授权凭证与槽位元数据持久化存储。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/connectors/oauth.ts`**
+    * **文件功能**：通用第三方 OAuth 2.0 鉴权握手与令牌刷新引擎。
+    * **依赖内容**：依赖 `src/util/errors.ts`。
+  * **`src/connectors/oauth-flow-store.ts`**
+    * **文件功能**：OAuth 临时会话状态与 PKCE 校验凭据持久化存储。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/connectors/browser-session-store.ts`**
+    * **文件功能**：针对需要浏览器鉴权的连接器会话状态持久化。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/connectors/background-exec-broker.ts`**
+    * **文件功能**：连接器后台执行代理与长任务状态桥接。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/sandbox/connector-sdk.ts`**
+    * **文件功能**：跨平台沙箱环境中 Composio / 自建连接器 SDK 的原子安装、软链接与哈希校验。
+    * **依赖内容**：依赖 `node:crypto`、`node:fs`、`src/util/shell.ts`。
+
+---
+
+### 12. 可靠结果投递与转录同步服务 (`src/delivery/`)
+* **核心功能**：Agent 执行结果多端可靠分发、转录增量推送、租约认领抢占（Drain Claim）与投递幂等去重。
+* **对应目录与文件**：
+  * **`src/delivery/delivery-store.ts`**
+    * **文件功能**：投递状态记录抽象契约与内存实现。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/delivery/postgres-delivery-store.ts`**
+    * **文件功能**：基于 PostgreSQL 的投递任务队列、行锁抢占与状态持久化。
+    * **依赖内容**：依赖 `src/delivery/delivery-store.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/delivery/run-result-delivery.ts`**
+    * **文件功能**：执行完成结果向用户界面或外部通道组装并触发投递。
+    * **依赖内容**：依赖 `src/types.ts`、`src/delivery/delivery-store.ts`。
+  * **`src/delivery/web-transcript-delivery.ts`**
+    * **文件功能**：针对 Web 端与长轮询客户端的实时会话转录投递通道。
+    * **依赖内容**：依赖 `src/sessions/session-store.ts`。
+
+---
+
+### 13. 分布式定时任务调度与执行队列 (`src/cron/`)
+* **核心功能**：分布式 Cron 表达式调度器、Postgres 原子作业排队、防重复触发锁与调度安全护栏。
+* **对应目录与文件**：
+  * **`src/cron/cron-store.ts`**
+    * **文件功能**：Cron 任务定义、运行计划与下次触发时钟存储。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/cron/scheduler.ts`**
+    * **文件功能**：分布式调度主循环、时钟对齐、任务激活与领导者租约竞争。
+    * **依赖内容**：依赖 `src/cron/cron-store.ts`、`src/cron/job-queue.ts`、`src/persistence/leader-lease.ts`、`src/util/sweeper.ts`。
+  * **`src/cron/job-queue.ts`**
+    * **文件功能**：基于 PostgreSQL SKIP LOCKED 的 Cron 作业并发执行队列。
+    * **依赖内容**：依赖 `src/cron/cron-store.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/cron/fire-store.ts`**
+    * **文件功能**：Cron 历史触发执行记录（Fire Logs）审计持久化。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/cron/schedule.ts`**
+    * **文件功能**：Cron 语法解析、区间计算与下次执行时间推算。
+    * **依赖内容**：依赖 `src/util/time.ts`。
+  * **`src/cron/authority.ts`**
+    * **文件功能**：Cron 任务执行权限判定与执行者作用域鉴权。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 14. Webhook 接收、校验与事件触发器 (`src/webhooks/`, `src/triggers/`)
+* **核心功能**：多平台外部 Webhook 签名验证（GitHub、Slack、Stripe 等）、请求暂存入库与基于事件驱动的 Agent 触发流。
+* **对应目录与文件**：
+  * **`src/webhooks/webhook-store.ts`**
+    * **文件功能**：外部 Webhook 接收记录、载荷快照与处理状态持久化。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/webhooks/webhook-receiver.ts`**
+    * **文件功能**：统一 Webhook 入口路由、幂等校验与入库调度分发。
+    * **依赖内容**：依赖 `src/webhooks/webhook-store.ts`、`src/webhooks/verifiers.ts`。
+  * **`src/webhooks/verifiers.ts`**
+    * **文件功能**：各主流外部集成商 Webhook 密码学签名校验规则库。
+    * **依赖内容**：依赖 `node:crypto`。
+  * **`src/triggers/trigger-store.ts`**
+    * **文件功能**：自动化事件触发规则配置持久化存储。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/triggers/run-trigger.ts`**
+    * **文件功能**：触发器事件判定、用户授权校验与 Agent 轮次（Turn）派发驱动。
+    * **依赖内容**：依赖 `src/triggers/trigger-store.ts`、`src/types.ts`。
+  * **`src/triggers/consent-notice.ts`**
+    * **文件功能**：外部自动化事件触发敏感操作时的用户二次确认通知机制。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/triggers/provenance.ts`**
+    * **文件功能**：事件触发溯源追踪与安全上下文防伪链路。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 15. 项目空间与工作区部署服务 (`src/projects/`, `src/deploy/`)
+* **核心功能**：多租户项目空间数据隔离、内部应用容器化/Serverless 部署提供方集成、部署状态机与隧道代理。
+* **对应目录与文件**：
+  * **`src/projects/project-store.ts`**
+    * **文件功能**：项目空间元数据、工作区绑定与权限关系持久化存储。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/deploy/deploy-store.ts`**
+    * **文件功能**：部署实例、版本构建快照与配置环境变量持久化。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/deploy/deploy-service.ts`**
+    * **文件功能**：应用发布、回滚、状态检查与部署生命周期调度中心。
+    * **依赖内容**：依赖 `src/deploy/deploy-store.ts`、`src/deploy/deploy-provider.ts`。
+  * **`src/deploy/docker-deploy-provider.ts`**
+    * **文件功能**：基于本地/远程 Docker 引擎的容器构建与部署驱动。
+    * **依赖内容**：依赖 `src/deploy/deploy-provider.ts`。
+  * **`src/deploy/fly-deploy-provider.ts`**
+    * **文件功能**：Fly.io 云平台微容器自动化发布与网络互联驱动。
+    * **依赖内容**：依赖 `src/deploy/deploy-provider.ts`。
+  * **`src/deploy/aws-deploy-provider.ts`**
+    * **文件功能**：AWS ECS/AppRunner 云上无服务器应用部署提供方。
+    * **依赖内容**：依赖 `src/deploy/deploy-provider.ts`。
+  * **`src/deploy/porter-deploy-provider.ts`**
+    * **文件功能**：Porter PaaS Kubernetes 部署提供者。
+    * **依赖内容**：依赖 `src/deploy/deploy-provider.ts`。
+  * **`src/deploy/shared-deploy-provider.ts`**
+    * **文件功能**：多应用共享托管环境轻量部署驱动。
+    * **依赖内容**：依赖 `src/deploy/deploy-provider.ts`。
+
+---
+
+### 16. 交互表面快照与环境上下文感知 (`src/surface-cache/`, `src/api/surface-context-puller.ts`)
+* **核心功能**：各端状态快照（Surface Cache）、频道权限策略快照、环境上下文增量拉取与注入。
+* **对应目录与文件**：
+  * **`src/surface-cache/surface-cache.ts`**
+    * **文件功能**：交互通道（Slack 频道、用户列表等）状态快照抽象与 PostgreSQL 持久化。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/surface-cache/channel-policy-store.ts`**
+    * **文件功能**：特定频道/表面响应策略与自动化参与规则持久化。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/surface-cache/ambient-judge.ts`**
+    * **文件功能**：基于表面上下文的环境常驻发言意图判定决策器。
+    * **依赖内容**：依赖 `src/surface-cache/surface-cache.ts`。
+  * **`src/api/surface-context-puller.ts`**
+    * **文件功能**：在 Agent 轮次启动前异步聚合各表面的最新上下文数据。
+    * **依赖内容**：依赖 `src/surface-cache/surface-cache.ts`、`src/types.ts`。
+
+---
+
+### 17. 智能建议流与活动推荐引擎 (`src/suggestions/`)
+* **核心功能**：基于会话进展与项目上下文的主动推荐活动生成与持久化展示。
+* **对应目录与文件**：
+  * **`src/suggestions/activities.ts`**
+    * **文件功能**：建议活动数据模型、生成逻辑与生命周期状态流转。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+
+---
+
+### 18. 会话唤醒巡检与外部资源监控 (`src/wake/`, `src/monitors/`)
+* **核心功能**：挂起/后台长任务会话的主动唤醒（Wake）、轮询巡检与外部第三方资源状态监控（Monitors）。
+* **对应目录与文件**：
+  * **`src/wake/wake.ts`**
+    * **文件功能**：会话唤醒信封格式、唤醒理由与投递驱动。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/wake/sweep.ts`**
+    * **文件功能**：定期扫描处于等待状态需要被唤醒激活的会话队列。
+    * **依赖内容**：依赖 `src/wake/wake.ts`、`src/sessions/session-store.ts`。
+  * **`src/wake/engaged-registry.ts`**
+    * **文件功能**：当前正在积极交互与运行的活跃会话租约注册表。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/monitors/monitor-store.ts`**
+    * **文件功能**：外部资源监听配置与触发条件持久化存储。
+    * **依赖内容**：依赖 `src/types.ts`、`src/persistence/pg-pool.ts`。
+  * **`src/monitors/monitor-poller.ts`**
+    * **文件功能**：定期轮询被监控资源的当前状态与阈值比对器。
+    * **依赖内容**：依赖 `src/monitors/monitor-store.ts`。
+  * **`src/monitors/monitor-broker.ts`**
+    * **文件功能**：监控警报与状态变更事件向 Agent 会话的消息通知代理。
+    * **依赖内容**：依赖 `src/monitors/monitor-store.ts`、`src/types.ts`。
+
+---
+*(后续 Gate 5... 推进完成后，均在本文档末尾继续向下追加编写)
+
