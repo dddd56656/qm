@@ -938,3 +938,183 @@
 ---
 *(后续 Gate 6... 推进完成后，均在本文档末尾继续向下追加编写)
 
+---
+---
+
+# Gate 6：交互 Surfaces 与产品入口层 (G6 交付全景)
+
+### 1. Web 前端交互界面与客户端组件 (`plugins/web-ui/client/`)
+* **核心功能**：现代 Web 交互界面、Lit Web Components 响应式组件库、设计系统与 CSS 变量主题、SSE 打字机多阶段渲染、代码块高亮与人工审批交互卡片。
+* **对应目录与文件**：
+  * **`plugins/web-ui/client/index.html`**
+    * **文件功能**：Web 前端单页应用 (SPA) 宿主入口 HTML，定义视口与元数据。
+    * **依赖内容**：加载 `plugins/web-ui/client/main.ts`。
+  * **`plugins/web-ui/client/main.ts`**
+    * **文件功能**：Web 客户端前端初始化与顶层 App 挂载入口。
+    * **依赖内容**：依赖 `plugins/web-ui/client/app.ts`。
+  * **`plugins/web-ui/client/app.ts`**
+    * **文件功能**：Web 核心视图控制器，调度侧边栏导航、对话消息流、定时任务管理、记忆查看与 Webhook 配置等 Tab 页面切换。
+    * **依赖内容**：依赖 Lit 核心库、`plugins/web-ui/client/api-client.ts`、各功能子组件。
+  * **`plugins/web-ui/client/api-client.ts`**
+    * **文件功能**：浏览器端与 Web UI 插件后端的异步通信客户端，支持 Fetch API 与 SSE EventSource 长连接拉取。
+    * **依赖内容**：浏览器原生 Fetch 与 EventSource。
+  * **`plugins/web-ui/client/theme.ts`**
+    * **文件功能**：系统外观主题控制（明亮模式/暗黑模式）、调色板状态管理与本地偏好持久化。
+    * **依赖内容**：无外部依赖。
+  * **`plugins/web-ui/client/components/`**
+    * **文件功能**：前端原子与功能组件集合，包含对话输入框 (`chat-input.ts`)、流式消息条目 (`message-view.ts`)、工具执行卡片 (`tool-card.ts`)、会话侧边栏 (`sidebar.ts`)、定时任务面板 (`crons-view.ts`)、Webhook 面板 (`webhooks-view.ts`) 与记忆查看器 (`memory-view.ts`)。
+    * **依赖内容**：依赖 Lit 模板引擎、`plugins/web-ui/client/theme.ts`。
+
+---
+
+### 2. Web UI 插件后端服务与流式代理 (`plugins/web-ui/server/`)
+* **核心功能**：Fastify Web 服务端、静态资源预压缩托管（Gzip Precompression）、请求体上限拦截（413 Body Cap）、Core API 鉴权代理、SSE 事件中继与跨成员会话共享续写控制。
+* **对应目录与文件**：
+  * **`plugins/web-ui/server/index.ts`**
+    * **文件功能**：Web UI 插件独立进程启动入口，解析端口与环境变量并监听网络服务。
+    * **依赖内容**：依赖 `plugins/web-ui/server/app.ts`。
+  * **`plugins/web-ui/server/app.ts`**
+    * **文件功能**：Fastify 应用实例装配，注册路由分发、错误处理中间件、预压缩静态资源托管（`@fastify/static`）与安全响应头。
+    * **依赖内容**：依赖 Fastify、`plugins/chassis/core-client.ts`、`plugins/web-ui/server/routes/`。
+  * **`plugins/web-ui/server/routes/turn.ts`**
+    * **文件功能**：Web 端对话轮次代理入口（`POST /api/turn`），实施请求体大小防护，调用 Core 并下发初始运行状态。
+    * **依赖内容**：依赖 `plugins/chassis/core-client.ts`。
+  * **`plugins/web-ui/server/routes/events.ts`**
+    * **文件功能**：实时 SSE 打字机流式中继路由（`GET /api/runs/:runId/events`），将 Core 的思考过程、工具调用与终态响应透传至浏览器。
+    * **依赖内容**：依赖 `plugins/chassis/core-client.ts`。
+  * **`plugins/web-ui/server/routes/crons.ts`** 与 **`plugins/web-ui/server/routes/webhooks.ts`**
+    * **文件功能**：定时任务与外部 Webhook 的 Web 端管理代理，执行用户身份绑定与权限隔离。
+    * **依赖内容**：依赖 `plugins/chassis/core-client.ts`。
+  * **`plugins/web-ui/server/routes/memory.ts`**
+    * **文件功能**：用户个人记忆与工作区 Notebook 读写管理路由。
+    * **依赖内容**：依赖 `plugins/chassis/core-client.ts`。
+  * **`plugins/web-ui/server/routes/threads.ts`**
+    * **文件功能**：会话历史拉取与团队成员共享线程权限校验（同频道可续写，局外人严禁访问）。
+    * **依赖内容**：依赖 `plugins/chassis/core-client.ts`。
+
+---
+
+### 3. Admin 管理控制台与全景配置中心 (`plugins/admin/`)
+* **核心功能**：管理员控制台前后台全套实现，涵盖组织全局策略配置、模型端点与目录热插拔、Slack 安装接入与双向活跃度追踪、历史转录带回放与 MCP 服务管理。
+* **对应目录与文件**：
+  * **`plugins/admin/src/index.ts`** 与 **`plugins/admin/src/app.ts`**
+    * **文件功能**：Admin 插件服务入口与 Fastify 实例构建，配置管理员会话鉴权与路由分发。
+    * **依赖内容**：依赖 Fastify、`plugins/chassis/core-client.ts`。
+  * **`plugins/admin/src/routes/`**
+    * **文件功能**：Admin 专用 REST API 集合，包括作用域配置 (`scope-config.ts`)、模型供应商设置 (`settings-providers.ts`)、Slack 镜像观测 (`slack-mirror.ts`)、用户权限流转 (`users.ts`)、MCP 服务器注册 (`mcp-servers.ts`) 等。
+    * **依赖内容**：依赖 `plugins/chassis/core-client.ts`。
+  * **`plugins/admin/ui/`**
+    * **文件功能**：基于 Lit 的管理员控制台前端 UI 组件，包括：
+      * `settings.ts`: 组织和作用域高级系统参数配置视图；
+      * `slack-installation.ts`: Slack 应用安装状态、OAuth 授权流与连接探针；
+      * `slack-activity.ts`: Slack 交互活跃度、投递失败率与重试链路统计；
+      * `slack-mirror.ts`: Slack 历史频道消息镜像时间线观测与全文检索；
+      * `transcript.ts`: 对话转录磁带（Session Tape）可视化审计与排障查看器；
+      * `artifacts.ts`: 知识构件、技能包与文件资产全生命周期管理面板。
+    * **依赖内容**：依赖 Lit 核心库、Lit Html 模板。
+
+---
+
+### 4. Portal 统一认证、身份防伪与反向代理网关 (`plugins/portal/`)
+* **核心功能**：企业级入口反向代理、SSO 认证集成、基于 HMAC-SHA256 的 Portal Identity 防伪加签、HTTPS 动态协议支持与安全受限路由访问保护。
+* **对应目录与文件**：
+  * **`plugins/portal/src/index.ts`**
+    * **文件功能**：Portal 独立服务入口，启动主 HTTP/HTTPS 网关服务。
+    * **依赖内容**：依赖 `plugins/portal/src/server.ts`。
+  * **`plugins/portal/src/server.ts`**
+    * **文件功能**：Portal 原生 HTTP 请求调度中枢，协调路由分发、Cookie 提取、登录重定向与上游代理转发。
+    * **依赖内容**：依赖 `plugins/portal/src/proxy.ts`、`plugins/portal/src/identity.ts`。
+  * **`plugins/portal/src/proxy.ts`**
+    * **文件功能**：高性能双工反向代理实现，支持安全请求头透传、协议动态判断（支持 HTTP 与 HTTPS 上游）、跨源 Frame 策略维护与流式响应传输。
+    * **依赖内容**：依赖 `node:http`、`node:https`、`plugins/chassis/core-client.ts`、`plugins/chassis/portal-identity.ts`。
+  * **`plugins/portal/src/identity.ts`**
+    * **文件功能**：基于 Cookie、OAuth 凭据与内部断言解析当前访问者的权威身份（Principal），并生成短时有效的防伪票据。
+    * **依赖内容**：依赖 `plugins/chassis/portal-identity.ts`。
+
+---
+
+### 5. Plugin Chassis 通信签名底座 (`plugins/chassis/`)
+* **核心功能**：Plugin 与 Core 之间的免编译、零循环引用的标准通信脚手架，保证分布式微服务架构下的密码学安全与身份互信。
+* **对应目录与文件**：
+  * **`plugins/chassis/src/core-client.ts`**
+    * **文件功能**：Plugin 发起与 Core 交互的标准客户端，自动计算时间戳防重放并追加 HMAC-SHA256 签名报头。
+    * **依赖内容**：依赖 `plugins/chassis/src/source-auth-sign.ts`、`node:http`、`node:https`。
+  * **`plugins/chassis/src/source-auth-sign.ts`**
+    * **文件功能**：核心签名生成器，使用共享密钥对 HTTP 方法、路径与请求体进行密码学生成。
+    * **依赖内容**：依赖 `node:crypto`。
+  * **`plugins/chassis/src/portal-identity.ts`**
+    * **文件功能**：Portal 权威身份令牌（`x-qm-portal-identity`）的签发（`mintPortalIdentity`）与校验（`verifyPortalIdentity`）引擎，带 60s TTL 防伪保护。
+    * **依赖内容**：依赖 `node:crypto`。
+  * **`plugins/chassis/src/errors.ts`**
+    * **文件功能**：插件跨端通信的通用错误结构体包装与安全状态码提取。
+    * **依赖内容**：无外部依赖。
+
+---
+
+### 6. Slack 核心交互协议与消息网关 (`src/slack/`)
+* **核心功能**：Slack 完整交互表面实现，含双工 SocketMode / HTTP 事件网关、消息防重投递幂等去重、交互式审批卡片、表情 Reaction 状态迁移与频道上下文全量镜像。
+* **对应目录与文件**：
+  * **`src/slack/runtime.ts`**
+    * **文件功能**：Slack 核心运行态生命周期管理器，管理 WebSocket 客户端连接、自动心跳保活、断线重连与动态凭据重新装载。
+    * **依赖内容**：依赖 `@slack/socket-mode`、`src/slack/turn-handler.ts`、`src/slack/events-proxy.ts`。
+  * **`src/slack/http-events.ts`** 与 **`src/slack/events-proxy.ts`**
+    * **文件功能**：Slack HTTP Webhook 签名验证（`x-slack-signature`）、请求防篡改校验与事件代理转发。
+    * **依赖内容**：依赖 `node:crypto`、`src/slack/events.ts`。
+  * **`src/slack/turn-handler.ts`**
+    * **文件功能**：接收来自 Slack 的消息输入，完成用户身份映射、频道权限感知，并组装为标准 Turn 请求派发给 Core 编排器。
+    * **依赖内容**：依赖 `src/api/app.ts`、`src/slack/presenters.ts`。
+  * **`src/slack/delivery.ts`** 与 **`src/slack/deliveries.ts`**
+    * **文件功能**：Agent 执行结果向 Slack 频道的可靠投递器，实现行锁排他抢占、网络抖动重试与消息格式 Markdown 转译。
+    * **依赖内容**：依赖 `src/delivery/delivery-store.ts`、`src/slack/mrkdwn.ts`。
+  * **`src/slack/delivery-claim-race.ts`** 与 **`src/slack/redelivery-dedup.ts`**
+    * **文件功能**：分布式并发场景下的投递认领防冲突裁决与 Slack 重复事件（相同 `client_msg_id`）幂等过滤。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/slack/approval-cards.ts`** 与 **`src/slack/approval-context.ts`**
+    * **文件功能**：交互式 Block Kit 审批卡片生成器，向管理员呈现敏感工具调用详情，并支持一键通过/拒绝交互。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/slack/approval-repost.ts`** 与 **`src/slack/approvals-quarantine.ts`**
+    * **文件功能**：超时审批卡片原位重新催办刷新与高危操作隔离检疫安全提醒。
+    * **依赖内容**：依赖 `src/slack/approval-cards.ts`。
+  * **`src/slack/reactions.ts`** 与 **`src/slack/ack-emoji.ts`**
+    * **文件功能**：基于表情符号（Emoji）的任务生命周期状态机推进（如收到任务打勾、处理中打眼睛、完成打礼花），支持租约丢失安全回滚。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/slack/task-ack.ts`** 与 **`src/slack/deferred-ack.ts`**
+    * **文件功能**：长任务先期临时确认消息派发，避免 Slack 3秒超时告警，后续自动衔接真实业务响应。
+    * **依赖内容**：依赖 `src/slack/delivery.ts`。
+  * **`src/slack/mirror/`** (包含 `mirror-service.ts`, `ingest.ts`, `store.ts`, `search.ts`)
+    * **文件功能**：频道历史消息双向持续镜像同步、全量归档、PostgreSQL 全文索引维护与毫秒级历史记录检索。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`、`src/directory/directory-store.ts`。
+  * **`src/slack/mrkdwn.ts`** 与 **`src/slack/presenters.ts`**
+    * **文件功能**：标准 CommonMark 到 Slack Mrkdwn 格式的转义与美化，处理富文本链接、用户 Mention 标签与高亮代码块。
+    * **依赖内容**：无外部依赖。
+  * **`src/slack/refusals.ts`** 与 **`src/slack/rate-limit-notice.ts`**
+    * **文件功能**：合规拦截、外部访客访问受限与速率限制友善告警文案生成。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 7. 交互表面基础抽象与凭证管理 (`src/surfaces/`)
+* **核心功能**：交互表面生命周期基类、Slack Workspace 授权凭证持久化与多租户托管多组织路由。
+* **对应目录与文件**：
+  * **`src/surfaces/slack-installation.ts`**
+    * **文件功能**：Slack App 安装记录、Bot Token、User Token 与凭据更新持久化存储。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/surfaces/slack-managed.ts`**
+    * **文件功能**：受托管多组织 Slack 接入点服务状态管理。
+    * **依赖内容**：依赖 `src/surfaces/slack-installation.ts`。
+  * **`src/surfaces/ui-state.ts`**
+    * **文件功能**：跨表面客户端通用的 UI 渲染状态与指示器数据结构。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 8. CLI 镜像清单与多云环境部署配置 (`cli/`)
+* **核心功能**：多环境容器构建镜像清单管理，驱动 Docker、AWS、Fly 等多云环境的标准化部署。
+* **对应目录与文件**：
+  * **`cli/manifest.json`**
+    * **文件功能**：声明 Core、Web UI、Admin、Portal、Auth 各微服务及沙箱基础镜像的 SHA-256 Digest 锁版本配置。
+    * **依赖内容**：由 CI 镜像流水线构建产出。
+  * **`cli/src/manifest.ts`**
+    * **文件功能**：CLI 端镜像清单加载器，解析服务镜像引用并校验 SHA-256 Digest 完整性。
+    * **依赖内容**：依赖 `cli/manifest.json`、`node:fs`。
+
