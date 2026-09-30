@@ -723,5 +723,218 @@
     * **依赖内容**：依赖 `src/monitors/monitor-store.ts`、`src/types.ts`。
 
 ---
-*(后续 Gate 5... 推进完成后，均在本文档末尾继续向下追加编写)
+
+### 19. 核心组装、正式入口与系统接线 (`src/wiring.ts`, `src/index.ts`, `src/instrument.ts`, `src/egress-authz-main.ts`)
+* **核心功能**：Core 完整运行时依赖倒置注入工厂（DI Wiring）、进程生命周期管理、Sentry 遥测初始化与外部网络流量授权代理主服务。
+* **对应目录与文件**：
+  * **`src/wiring.ts`**
+    * **文件功能**：系统装配中心，统一构建持久化 Store 单例、初始化模型 Harness 路由、组装沙箱环境、注册安全审查策略、挂载后台 Worker 并导出完整 HTTP App。
+    * **依赖内容**：依赖全系统底层 Store、`src/core/orchestrator.ts`、`src/api/app.ts`、`src/runs/worker.ts`、`src/config.ts`。
+  * **`src/index.ts`**
+    * **文件功能**：QM Core 正式生产主进程入口，负责加载配置、执行接线、启动 HTTP 服务端与注册优雅关机（Graceful Shutdown）信号。
+    * **依赖内容**：依赖 `src/wiring.ts`、`src/api/server.ts`、`src/config.ts`。
+  * **`src/instrument.ts`**
+    * **文件功能**：Sentry 异常捕获与 OpenTelemetry 分布式链路追踪插桩初始化。
+    * **依赖内容**：依赖 `@sentry/node`。
+  * **`src/egress-authz-main.ts`**
+    * **文件功能**：独立外部流量出口授权守护进程，控制沙箱内部对外部域名与网络的访问权限。
+    * **依赖内容**：依赖 `src/config.ts`、`src/auth/capability-token.ts`。
+
+---
+
+### 20. 统一 HTTP 服务器、路由中间件与端点总线 (`src/api/server.ts`, `src/api/http.ts`, `src/api/deps.ts`, `src/api/routes/`, `src/api/user-scoped-routes.ts`)
+* **核心功能**：原生高性能 HTTP 服务层、请求签名验签中间件、身份授权萃取、SSE 流式打字机通道与全量 RESTful 业务路由表。
+* **对应目录与文件**：
+  * **`src/api/server.ts`**
+    * **文件功能**：Node.js 原生 HTTP 服务器创建、请求体积上限控制、路由分发与健康检查探针（`/healthz`）。
+    * **依赖内容**：依赖 `node:http`、`src/api/http.ts`、`src/api/routes/index.ts`。
+  * **`src/api/http.ts`**
+    * **文件功能**：HTTP 上下文包装、JSON 序列化响应、Source-Auth 签名鉴权校验与 Bearer Capability Token 解析。
+    * **依赖内容**：依赖 `src/auth/source-auth.ts`、`src/auth/capability-token.ts`。
+  * **`src/api/deps.ts`**
+    * **文件功能**：API 路由所依赖的全量服务实例类型接口集合定义（ServerDeps）。
+    * **依赖内容**：依赖各领域 Store 与 Service 接口定义。
+  * **`src/api/routes/index.ts`**
+    * **文件功能**：RESTful 路由总装矩阵，统一注册 turns、sessions、runs、admin、crons、webhooks 等端点处理函数。
+    * **依赖内容**：依赖 `src/api/routes/` 内部全部子路由模块。
+  * **`src/api/routes/turns.ts`**
+    * **文件功能**：Agent 对话轮次提交（`/v1/turns`）、排队查询、指标记录与主动取消端点。
+    * **依赖内容**：依赖 `src/api/app.ts`、`src/api/http.ts`。
+  * **`src/api/routes/run-events.ts`**
+    * **文件功能**：服务端事件推送（SSE 流：`/api/runs/:runId/events`），向客户端实时流式回传思考过程、文本 Delta 与工具调用事件。
+    * **依赖内容**：依赖 `src/runs/run-stream.ts`、`src/runs/run-store.ts`。
+  * **`src/api/routes/admin.ts`** 与 **`src/api/routes/admin-resources.ts`**
+    * **文件功能**：管理控制台 API 集合，提供组织范围模型、凭据、沙箱、安全策略、成员与审计日志的管理端点。
+    * **依赖内容**：依赖 `src/admin/admin-service.ts`、`src/api/http.ts`。
+  * **`src/api/routes/deployments.ts`**
+    * **文件功能**：内部应用部署、发布、回滚、环境变量配置与子域名路由反向代理端点。
+    * **依赖内容**：依赖 `src/deploy/deploy-store.ts`、`src/deploy/deploy-service.ts`。
+  * **`src/api/routes/loops.ts`** 与 **`src/api/routes/loop-items.ts`**
+    * **文件功能**：自治循环（Loops）增删改查、执行队列调度与人工审核确认 HTTP 交互接口。
+    * **依赖内容**：依赖 `src/loops/loop-store.ts`、`src/loops/runner.ts`。
+  * **`src/api/user-scoped-routes.ts`**
+    * **文件功能**：用户上下文约束中间件，防止跨租户和越权访问用户私有会话与文件。
+    * **依赖内容**：依赖 `src/api/http.ts`、`src/types.ts`。
+
+---
+
+### 21. App 核心门面与业务用例聚合 (`src/api/app.ts`, `src/api/app-*.ts`)
+* **核心功能**：Core 顶层业务外观模式实现，将底层零散领域模型聚合为面向交互表面的标准用例接口。
+* **对应目录与文件**：
+  * **`src/api/app.ts`**
+    * **文件功能**：Core App 核心实例类，对外暴露 `turn()`、`getRun()`、`listSessions()` 等标准操作。
+    * **依赖内容**：依赖 `src/api/app-turn.ts`、`src/api/app-sessions.ts`、`src/api/app-messaging.ts` 等分模块。
+  * **`src/api/app-turn.ts`**
+    * **文件功能**：Turn 轮次准入逻辑封装，处理入参标准化、自动恢复探测、排队入库与异步 Worker 派发。
+    * **依赖内容**：依赖 `src/runs/run-store.ts`、`src/core/turn-origin.ts`、`src/types.ts`。
+  * **`src/api/app-sessions.ts`**
+    * **文件功能**：会话生命周期门面，处理会话创建、标题自动生成、分支 Fork、权限投影与归档。
+    * **依赖内容**：依赖 `src/sessions/session-store.ts`、`src/sessions/session-view.ts`。
+  * **`src/api/app-messaging.ts`**
+    * **文件功能**：统一消息收发门面，处理历史消息读取、参与者过滤与跨表面广播投递。
+    * **依赖内容**：依赖 `src/sessions/transcript-tape.ts`、`src/directory/directory-store.ts`。
+  * **`src/api/app-search.ts`** 与 **`src/api/app-resource-search.ts`**
+    * **文件功能**：多模态全文检索与资源定位服务（支持历史对话、工作区文件与技能匹配）。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`、`src/types.ts`。
+  * **`src/api/app-skills.ts`**
+    * **文件功能**：技能包对用户的可见性计算、授权过滤与沙箱热加载门面。
+    * **依赖内容**：依赖 `src/skills/` 模块。
+  * **`src/api/app-deployments.ts`**
+    * **文件功能**：应用部署状态机调度与用户权限校验包装。
+    * **依赖内容**：依赖 `src/deploy/deploy-store.ts`。
+  * **`src/api/app-ambient.ts`**
+    * **文件功能**：环境常驻感知判定与无唤醒词条件下的被动发言意图计算。
+    * **依赖内容**：依赖 `src/surface-cache/ambient-judge.ts`。
+  * **`src/api/app-helpers.ts`** 与 **`src/api/app-types.ts`**
+    * **文件功能**：App 门面内部公共辅助函数与参数数据结构契约定义。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 22. Agent 统一编排器与多轮上下文生命周期 (`src/core/orchestrator.ts`, `src/core/orchestrator/`)
+* **核心功能**：Agent 核心执行状态机，驱动系统提示词编排、动态工具集装配、安全合规初筛、模型 Harness 调用、沙箱执行与租约自动保活。
+* **对应目录与文件**：
+  * **`src/core/orchestrator.ts`**
+    * **文件功能**：`Orchestrator` 主类，调度 `handleTurn()` 单轮全生命周期（加载历史 -> 组装上下文 -> 模型推理 -> 工具执行 -> 审批挂起 -> 持久化落库）。
+    * **依赖内容**：依赖 `src/harness/harness-router.ts`、`src/sessions/session-store.ts`、`src/security/security-screener.ts`、`src/core/orchestrator/` 辅助模块。
+  * **`src/core/orchestrator/prompt-blocks.ts`**
+    * **文件功能**：动态系统提示词（System Prompt）构建器，按顺序拼装环境常识、记忆快照、工具使用规范与行为守则。
+    * **依赖内容**：依赖 `src/core/environment-facts.ts`、`src/types.ts`。
+  * **`src/core/orchestrator/sandboxes.ts`**
+    * **文件功能**：针对轮次绑定的沙箱环境按需供应、文件挂载与生命周期回收。
+    * **依赖内容**：依赖 `src/sandbox/sandbox.ts`。
+  * **`src/core/orchestrator/lease-keepalive.ts`**
+    * **文件功能**：长耗时执行轮次的分布式会话租约（Session Lease）心跳自动保活协程。
+    * **依赖内容**：依赖 `src/sessions/session-store.ts`。
+  * **`src/core/orchestrator/security-screen.ts`**
+    * **文件功能**：执行前输入审查与执行后工具输出检疫（Quarantine），防止提示词注入与敏感数据外泄。
+    * **依赖内容**：依赖 `src/security/security-screener.ts`。
+  * **`src/core/orchestrator/surface-tools.ts`**
+    * **文件功能**：针对不同交互端（Web、Slack 等）动态注入特定表面专有工具集（如发送通知、请求审批）。
+    * **依赖内容**：依赖 `src/tools/primitives.ts`。
+  * **`src/core/orchestrator/compaction.ts`**
+    * **文件功能**：超长历史上下文压缩、折叠与关键信息保留算法。
+    * **依赖内容**：依赖 `src/sessions/transcript-tape.ts`。
+  * **`src/core/orchestrator/turn-helpers.ts`** 与 **`src/core/orchestrator/types.ts`**
+    * **文件功能**：编排器内部上下文类型定义、附件规范化与错误重构工具库。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 23. 运行时执行循环与后台 Worker 调度 (`src/runs/worker.ts`, `src/runs/run-stream.ts`, `src/core/turn-*`)
+* **核心功能**：后台分布式执行 Worker 循环、执行状态机、流式输出缓冲区管理、轮次结果判定与故障重试重放。
+* **对应目录与文件**：
+  * **`src/runs/worker.ts`**
+    * **文件功能**：异步 Worker 主循环，基于持久化队列抢占任务（Claim Lease）、心跳维持、调用编排器并在完成时原子标记状态。
+    * **依赖内容**：依赖 `src/runs/run-store.ts`、`src/core/orchestrator.ts`。
+  * **`src/runs/run-stream.ts`**
+    * **文件功能**：内存/Redis 流式事件分发总线，缓冲单轮生成文字与工具事件并对齐 SSE 推送。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/core/turn-outcome.ts`**
+    * **文件功能**：单轮执行结果分类裁定（成功、需人工审批挂起、输入等待、失败可重试、硬性拒绝）。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/core/turn-resume.ts`**
+    * **文件功能**：故障/中断后会话恢复算法，跳过已完成工作节点、注入断点续传提示。
+    * **依赖内容**：依赖 `src/sessions/transcript-tape.ts`。
+  * **`src/core/turn-options.ts`** 与 **`src/core/turn-origin.ts`**
+    * **文件功能**：轮次执行参数计算（模型档位、思考预算、超时时间）与调用溯源凭据解析。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/core/turn-error.ts`**
+    * **文件功能**：业务自定义异常体系（可重试与不可重试异常分类）与用户友好错误文案抹平。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 24. 自治循环系统与工作账本 (`src/loops/`)
+* **核心功能**：无人值守自主循环驱动引擎、作业项账本（Item Ledger）、动态风控熔断（Governor）、自动发版门禁与第三方集成。
+* **对应目录与文件**：
+  * **`src/loops/runner.ts`**
+    * **文件功能**：自治循环执行器，按调度节奏拉取待办作业、启动 Agent 轮次并评估交付物。
+    * **依赖内容**：依赖 `src/loops/loop-store.ts`、`src/loops/item-ledger.ts`、`src/core/orchestrator.ts`。
+  * **`src/loops/loop-store.ts`**
+    * **文件功能**：自治循环实体配置、状态机与绑定定时触发器的持久化管理。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/loops/item-ledger.ts`**
+    * **文件功能**：自主作业项流转账本，记录输入、执行轨迹、审查反馈与最终交付物。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/loops/governor.ts`**
+    * **文件功能**：自动化执行风控调节器，根据失败率、异常调用与未授权动作自动实施检疫熔断（Quarantine）。
+    * **依赖内容**：依赖 `src/loops/item-ledger.ts`。
+  * **`src/loops/ship-gate.ts`** 与 **`src/loops/ship-grant-store.ts`**
+    * **文件功能**：自治交付自动化放行门禁与人工一次性/永久授权凭据持久化。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/loops/output-store.ts`** 与 **`src/loops/success-evaluation.ts`**
+    * **文件功能**：自治生成产物暂存库与产物质量自动化裁定器。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/loops/sources/`**
+    * **文件功能**：外部信号源集成适配器（支持 Gmail 邮件、Slack 消息等事件摄取驱动）。
+    * **依赖内容**：依赖各外部通信协议。
+
+---
+
+### 25. 模型目录、凭据与多 Provider 动态网关 (`src/model/`)
+* **核心功能**：多供应商模型统一元数据目录、动态 Custom Provider 注册挂载、个人与组织模型凭据加密存储与端点路由重写。
+* **对应目录与文件**：
+  * **`src/model/model-catalog.ts`** 与 **`src/model/gateway-catalog.ts`**
+    * **文件功能**：预设大模型能力特征清单、上下文窗口、计量定价与供应商分类注册。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/model/custom-providers.ts`** 与 **`src/model/custom-provider-store.ts`**
+    * **文件功能**：管理员动态接入兼容协议（OpenAI/Anthropic）的自定义大模型网关及其持久化加密库。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`、`src/credentials/keychain.ts`。
+  * **`src/model/user-model-credential-store.ts`** 与 **`src/model/model-credential-store.ts`**
+    * **文件功能**：支持用户自带 Key（BYOK）及组织共享模型凭据的安全加密隔离存储。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/model/provider-endpoints.ts`**
+    * **文件功能**：各供应商 API 请求端点基地址统一配置与重定向覆盖。
+    * **依赖内容**：依赖 `src/config.ts`。
+  * **`src/model/model-verification.ts`**
+    * **文件功能**：模型凭据可用性与连通性实时探针与验真机制。
+    * **依赖内容**：依赖 `src/model/model-catalog.ts`。
+  * **`src/model/model-overlay.ts`** 与 **`src/model/model-overlay-store.ts`**
+    * **文件功能**：运行时针对特定作用域（Scope）动态覆盖模型参数与路由策略。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/model/codex-device-login.ts`**
+    * **文件功能**：Codex / ChatGPT 设备代码（Device Code）免密 OAuth 登录授权桥接。
+    * **依赖内容**：依赖 `node:child_process`。
+
+---
+
+### 26. 交互表面抽象、Slack 运行态与新用户引导 (`src/surfaces/`, `src/onboarding/`)
+* **核心功能**：各客户端交互表面状态机抽象、Slack 进程内长连接/事件运行时与新成员初次互动引导流程。
+* **对应目录与文件**：
+  * **`src/surfaces/ui-state.ts`**
+    * **文件功能**：交互界面 UI 状态快照与跨客户端渲染元数据契约。
+    * **依赖内容**：依赖 `src/types.ts`。
+  * **`src/surfaces/slack-installation.ts`** 与 **`src/surfaces/slack-managed.ts`**
+    * **文件功能**：Slack Workspace 安装凭证持久化、托管实例状态管理与多团队接入。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+  * **`src/surfaces/slack-runtime.ts`**
+    * **文件功能**：Slack SocketMode / HTTP 事件接收循环与 Core App 轮次调度的连接桥梁。
+    * **依赖内容**：依赖 `src/api/app.ts`。
+  * **`src/onboarding/onboarding.ts`**
+    * **文件功能**：新员工/用户首次访问时的安全问候、使用指引与默认权限预置流程。
+    * **依赖内容**：依赖 `src/types.ts`、`src/sessions/session-store.ts`。
+
+---
+*(后续 Gate 6... 推进完成后，均在本文档末尾继续向下追加编写)
 
