@@ -1206,3 +1206,95 @@
   * **`scripts/migrate/`**
     * **文件功能**：数据库迁移脚本，按序号依次幂等执行 SQL 变更并记录版本号。
     * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。
+
+---
+
+# Gate 8：全链路端到端生产验收、全云交付验证与 Golden Master 终审发布 (G8 交付全景)
+
+### 1. 全系统端到端联合验收体系 (`test/e2e/` & `cli/test/e2e/`)
+* **核心功能**：打通 Web-UI + Portal + Core + Admin + 真实/仿真沙箱全链路网络，执行端到端会话驱动、SSO 认证跳转、治理策略审计、多云微服务生命周期编排联合验收。
+* **对应目录与文件**：
+  * **`test/e2e/web-portal-core.test.ts`**
+    * **文件功能**：Web UI 通过 Portal 反向代理与 Core 通信的全链路会话收发、流式响应打字机渲染、敏感工具审批卡片与会话上下文恢复 E2E 验证。
+    * **依赖内容**：依赖 `src/wiring.ts`、`plugins/portal/src/index.ts`、`plugins/web-ui/server/index.ts`、`src/types.ts`。
+  * **`test/e2e/admin-governance.test.ts`**
+    * **文件功能**：Admin 治理端点安全穿透与权限控制验收，覆盖 SOUL 系统提示词版本冲突、命令执行策略审查、凭据管理生命周期与审计日志全链路穿透。
+    * **依赖内容**：依赖 `src/wiring.ts`、`plugins/admin/src/index.ts`、`src/persistence/pg-pool.ts`。
+  * **`test/e2e/auth-flow.test.ts`**
+    * **文件功能**：OIDC 授权码 + PKCE 全流程端到端流转、单次 Magic Link 防重放防篡改机制、记住浏览器无感换票及核心故障 Fail-Closed 安全降级。
+    * **依赖内容**：依赖 `plugins/auth/src/index.ts`、`plugins/portal/src/index.ts`、`jose`。
+  * **`cli/test/e2e/docker-lifecycle.e2e.test.ts`**
+    * **文件功能**：Docker 目标环境下全微服务集群（Core、Web-UI、Admin、Portal、Postgres 及自定义插件）的构建、启动、幂等重新执行、健康巡检、停机与卷清除全生命周期自动化验收。
+    * **依赖内容**：依赖 `cli/src/backends/docker.ts`、`cli/test/e2e/harness.ts`。
+  * **`cli/test/e2e/fly.e2e.test.ts`**
+    * **文件功能**：Fly.io 跨云集群发布计划生成（Plan）、密钥配置验证、多应用缩容（Scale to 0）与单机/多机资源配给全流程仿真验收。
+    * **依赖内容**：依赖 `cli/src/backends/fly.ts`、`cli/src/config.ts`。
+  * **`cli/test/e2e/dev.e2e.test.ts`**
+    * **文件功能**：实机开发环境命令（`qm dev`）路由分发、服务别名映射去重、非法目标拦截、租约锁状态探测与日志流式拉取。
+    * **依赖内容**：依赖 `scripts/dev/cli.ts`、`scripts/dev/lib/lease.ts`、`cli/test/e2e/harness.ts`。
+  * **`cli/test/e2e/init.e2e.test.ts`**
+    * **文件功能**：CLI 项目初始化脚手架端到端校验，确保生成符合规范的配置文件、环境变量模板、Slack 应用清单与可执行沙箱工具层。
+    * **依赖内容**：依赖 `cli/src/commands/init.ts`、`cli/src/contract.ts`。
+
+---
+
+### 2. 生产环境多云微服务容器封箱与编排清单 (`deploy/`)
+* **核心功能**：交付全套生产级微服务容器构建上下文、多云部署清单、Envoy 出口代理配置及 Kubernetes / Helm 集群部署模板。
+* **对应目录与文件**：
+  * **`deploy/core/Dockerfile`** 与 **`deploy/core/fly.toml`**
+    * **文件功能**：Core 核心微服务生产容器构建清单与 Fly.io 规格配置，集成 Node.js 生产环境、预置 Connector SDK 与私有 6PN 网络互联。
+    * **依赖内容**：依赖根目录源码树、`package.json`、`deploy/connector-sdk/`。
+  * **`deploy/web-ui/Dockerfile`** 与 **`deploy/web-ui/fly.toml`**
+    * **文件功能**：Web UI 生产静态资源容器化打包与托管服务，承载 Vite 构建产物、Precompressed Gzip 静态资源与 Node.js 代理服务。
+    * **依赖内容**：依赖 `plugins/web-ui/`。
+  * **`deploy/portal/Dockerfile`** 与 **`deploy/portal/fly.toml`**
+    * **文件功能**：Portal 公网反向代理与统一认证前门微服务容器清单，负责 HTTPS 终止、OIDC 登录认证、Cookie 签名管理与流量路由。
+    * **依赖内容**：依赖 `plugins/portal/`、`plugins/chassis/`。
+  * **`deploy/egress-proxy/Dockerfile`**、**`deploy/egress-proxy/envoy.yaml`** 与 **`deploy/egress-proxy/start.sh`**
+    * **文件功能**：沙箱网络出口安全授权代理（Envoy Proxy），实现沙箱内 Agent 外网访问的白名单过滤、审计拦截与流量隔离。
+    * **依赖内容**：依赖 Envoy 官方基础镜像、`deploy/egress-proxy/envoy.yaml`。
+  * **`deploy/helm/`** (包含 `Chart.yaml`, `values.yaml`, `templates/`)
+    * **文件功能**：Kubernetes 生产集群 Helm Chart，完整编排 Deployment、Service、Ingress、Secret 及 ServiceAccount。
+    * **依赖内容**：依赖 Kubernetes v1.26+ 运行时规范。
+  * **`deploy/stacks/`** (包含 `acme/`, `broker/`, `acme/test/conformance.test.ts`)
+    * **文件功能**：企业级标准生产部署栈预设模板与沙箱合规性契约断言，验证部署契约 v1（Contract v1）兼容性。
+    * **依赖内容**：依赖 `@yc-software/qm/contract`、`deploy/stacks/acme/qm.config.jsonc`。
+
+---
+
+### 3. QM 命令行工具链与跨云交付引擎 (`cli/`)
+* **核心功能**：发布生产级 QM 命令行（`@yc-software/qm`），提供跨云发布、沙箱构建、环境巡检、密钥同步与服务生命周期闭环管控。
+* **对应目录与文件**：
+  * **`cli/bin/qm.ts`** 与 **`cli/src/cli.ts`**
+    * **文件功能**：CLI 可执行入口与核心分发中枢，管理全部用户子命令（`check`, `init`, `plan`, `up`, `down`, `status`, `logs`, `doctor`, `dev`, `secrets`, `sandbox`, `slack`, `aws`, `fly`）。
+    * **依赖内容**：依赖 `cli/src/commands/`、`cli/src/util.ts`。
+  * **`cli/src/contract.ts`**
+    * **文件功能**：对外导出的稳定平台契约接口（Contract v1），提供配置加载校验、沙箱层规格验证与环境规范判定。
+    * **依赖内容**：依赖 `cli/src/config.ts`、`cli/src/sandbox-layer.ts`。
+  * **`cli/src/backends/aws.ts`** 与 **`cli/src/aws-lease.ts`**
+    * **文件功能**：AWS 跨云交付后端引擎，管理 ECS Fargate 蓝绿部署、ALB 规则热更新、ECR 镜像发布、DynamoDB 状态锁与 Secrets Manager 凭据上云。
+    * **依赖内容**：依赖 `node:child_process`、`cli/src/util.ts`、`cli/src/config.ts`。
+  * **`cli/src/backends/fly.ts`**
+    * **文件功能**：Fly.io 跨云交付后端引擎，生成应用编排配置、执行机器规格配置、自动化密钥推送与滚动部署更新。
+    * **依赖内容**：依赖 `cli/src/util.ts`、`cli/src/config.ts`。
+  * **`cli/src/backends/docker.ts`**
+    * **文件功能**：本地 Docker Compose 编排后端引擎，管理多容器构建、本地虚拟网络隔离、Postgres 卷持久化与优雅停机。
+    * **依赖内容**：依赖 `node:child_process`、`cli/src/util.ts`。
+  * **`cli/src/commands/doctor.ts`**
+    * **文件功能**：环境健康度全景巡检命令，诊断本地 Docker、云端凭证、配置文件与网络端口冲突，支持自动修复建议。
+    * **依赖内容**：依赖 `cli/src/config.ts`、`cli/src/util.ts`。
+
+---
+
+### 4. 生产发布矩阵构建与 Golden Master 制品构建 (`dist/` & `dist-web/`)
+* **核心功能**：构建高内聚、自包含的生产发布制品，包含前端预压缩静态产物、CLI 生产分发包与标准化 Connector SDK 构建流。
+* **对应目录与文件**：
+  * **`plugins/web-ui/dist-web/`**
+    * **文件功能**：Web UI 生产环境静态打包产物，包含经 Vite 代码分割、摇树优化与全套 Gzip 预压缩产物（35 个预压缩资源，体积缩减 73%）。
+    * **依赖内容**：由 `plugins/web-ui/vite.config.ts`、`plugins/web-ui/src/` 编译产出。
+  * **`cli/dist/`**
+    * **文件功能**：QM CLI 正式 npm 发行版本构建制品，包含 TypeScript 编译后的 ESM 代码、完备的 `.d.ts` 类型声明文件及入口脚本 `dist/bin/qm.js`。
+    * **依赖内容**：由 `cli/tsconfig.build.json`、`cli/src/` 编译产出。
+  * **`deploy/connector-sdk/`**
+    * **文件功能**：集成型 Connector SDK 独立构建套件，供第三方或沙箱工具接入 QM 核心能力，输出强类型 API 描述符。
+    * **依赖内容**：依赖 `deploy/connector-sdk/build.mjs`。
