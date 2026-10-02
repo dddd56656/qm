@@ -144,7 +144,7 @@ const captureScript = (groups: readonly SweepGroup[], gate: boolean): string => 
   lines.push(
     `{ [ "$#" -gt 0 ] && find -L "$@" ${pruneExpr()} -o -type f ${size} -print0; ` +
       `[ -n "$cf" ] && find -L $cf -maxdepth 0 -type f ${size} -print0; :; } ` +
-      `2>/dev/null | LC_ALL=C sort -z | tar -h --null -T - -cf "$t" 2>/dev/null`,
+      `2>/dev/null | LC_ALL=C sort -z | tar -cf "$t" -h --null -T - 2>/dev/null`,
     `[ -e "$t" ] || : > "$t"`,
   );
   groups.forEach((group, i) => {
@@ -680,7 +680,7 @@ export async function removeDeviceFlowLogins(
   if (!paths.length) return [];
   const removed = await input.sandbox.run(
     input.handle,
-    `cd "$HOME" 2>/dev/null || exit 0; for p in ${canonicalRoots.map(shq).join(" ")}; do if [ -L "$p" ]; then target="$(readlink -- "$p" 2>/dev/null || true)"; case "$target" in ${shq(`${EPHEMERAL_CRED_DIR}/`)}*) rm -rf -- "$target" ;; esac; fi; done; rm -rf -- ${paths.map(shq).join(" ")}`,
+    `cd "$HOME" 2>/dev/null || exit 0; for p in ${canonicalRoots.map(shq).join(" ")}; do if [ -L "$p" ]; then target="$(readlink -- "$p" 2>/dev/null || true)"; case "$target" in ${shq(`${EPHEMERAL_CRED_DIR}/`)}*|*"/agent-creds/"*) rm -rf -- "$target" ;; esac; fi; done; rm -rf -- ${paths.map(shq).join(" ")}`,
     { timeoutMs: 60_000 },
   );
   if (removed.code !== 0) {

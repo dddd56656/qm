@@ -66,6 +66,7 @@ import {
   promptHidden,
   readEnvFile,
   resolveBuildRepoRoot,
+  resolveCommand,
   runInherit,
   runInheritAsync,
   settleAll,
@@ -591,10 +592,12 @@ export function isPinnedWorkloadImage(config: QmConfig, workload: string, image:
 
 function dockerLogin(aws: AwsConfig): void {
   const password = awsText(aws, ["ecr", "get-login-password"]);
-  const result = spawnSync("docker", ["login", "--username", "AWS", "--password-stdin", ecrHost(aws)], {
+  const resolved = resolveCommand("docker", ["login", "--username", "AWS", "--password-stdin", ecrHost(aws)]);
+  const result = spawnSync(resolved.cmd, resolved.args, {
     input: `${password}\n`,
     encoding: "utf8",
     stdio: ["pipe", "inherit", "inherit"],
+    ...(resolved.cmd.endsWith(".cmd") || resolved.cmd.endsWith(".bat") ? { shell: true } : {}),
   });
   if (result.status !== 0) throw new CliError("docker login to ECR failed");
 }

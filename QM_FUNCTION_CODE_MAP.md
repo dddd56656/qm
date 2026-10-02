@@ -1118,3 +1118,91 @@
     * **文件功能**：CLI 端镜像清单加载器，解析服务镜像引用并校验 SHA-256 Digest 完整性。
     * **依赖内容**：依赖 `cli/manifest.json`、`node:fs`。
 
+---
+
+# Gate 7：全仓恢复与全量生态对齐 (G7 交付全景)
+
+### 1. CLI 命令行工具链与交互运维体系 (`cli/`)
+* **核心功能**：QM 命令行工具完整实现，覆盖多云部署、环境诊断、开发环境管理、密钥配给与沙箱生命周期控制。
+* **对应目录与文件**：
+  * **`cli/src/index.ts`**
+    * **文件功能**：CLI 主入口路由器，解析全局命令行参数（`--config`、`--verbose` 等），分发子命令执行。
+    * **依赖内容**：依赖 `cli/src/commands/`、`cli/src/util.ts`、`cli/src/error.ts`。
+  * **`cli/src/commands/doctor.ts`**
+    * **文件功能**：运行环境与云基础设施全方位体检诊断，探测 Docker/Fly/AWS 等服务连通性与配置合规性。
+    * **依赖内容**：依赖 `cli/src/util.ts`、`cli/src/config.ts`。
+  * **`cli/src/commands/init.ts`**
+    * **文件功能**：初始化本地 QM 项目脚手架，生成标准配置文件、密钥对与预设部署模板。
+    * **依赖内容**：依赖 `cli/src/util.ts`、`node:fs`。
+  * **`cli/src/commands/deploy.ts`**
+    * **文件功能**：编排与执行跨云微服务发布流程，构建容器并推送至指定 Cloud Provider。
+    * **依赖内容**：依赖 `cli/src/deploy/`、`cli/src/manifest.ts`。
+  * **`cli/src/commands/dev.ts`**
+    * **文件功能**：本地联调环境看门狗，联动多进程启动 Core、Web UI、Portal 与各微服务插件。
+    * **依赖内容**：依赖 `cli/src/util.ts`、`scripts/dev/lib/`。
+  * **`cli/src/commands/secrets.ts`**
+    * **文件功能**：部署密钥与敏感环境变量的安全注入、校验与远端同步管理。
+    * **依赖内容**：依赖 `cli/src/util.ts`、`cli/src/secrets.ts`。
+  * **`cli/src/commands/fly.ts`** 与 **`cli/src/commands/aws.ts`**
+    * **文件功能**：针对 Fly.io 与 AWS 环境的专属运维命令子集，支持机器查看、日志拉取、SSH 控制台与安全组配给。
+    * **依赖内容**：依赖 `cli/src/util.ts`。
+  * **`cli/src/util.ts`**
+    * **文件功能**：跨平台命令执行与进程管理工具，包含 Windows/Linux 可执行文件解析、异步带超时进程生成与标准输出捕获。
+    * **依赖内容**：依赖 `node:child_process`、`node:fs`、`node:path`。
+
+---
+
+### 2. 多云微服务部署驱动与容器编排 (`deploy/` & `src/deploy/`)
+* **核心功能**：支持 Fly.io、AWS (ECS/S3/ALB)、Porter、Docker 与本地多云架构微服务无缝部署。
+* **对应目录与文件**：
+  * **`src/deploy/fly-deploy-provider.ts`** 与 **`deploy/fly/`**
+    * **文件功能**：Fly.io 平台自动化部署提供商，负责 App 规格生成、Machine API 资源分配与 6PN 私有网络拓扑互通。
+    * **依赖内容**：依赖 `src/types.ts`、`src/deploy/types.ts`。
+  * **`src/deploy/aws-deploy-provider.ts`** 与 **`deploy/aws/`**
+    * **文件功能**：AWS 平台部署提供商，自动化管理 ECS 任务定义、S3 静态存储桶、IAM 角色与安全网络隔离。
+    * **依赖内容**：依赖 `@aws-sdk/client-s3`、`src/types.ts`。
+  * **`src/deploy/porter-deploy-provider.ts`** 与 **`deploy/porter/`**
+    * **文件功能**：Porter Kubernetes 托管平台部署驱动，转换应用规范至 Helm/K8s 资源清单。
+    * **依赖内容**：依赖 `src/deploy/types.ts`。
+  * **`src/deploy/docker-deploy-provider.ts`** 与 **`deploy/docker/`**
+    * **文件功能**：本地与轻量级服务器 Docker Compose 容器编排提供商，支持全套微服务一键拉起。
+    * **依赖内容**：依赖 `node:child_process`、`src/util/shell.ts`。
+  * **`src/deploy/deployment-layer.ts`**
+    * **文件功能**：部署层配置提取器，管理自定义工具安装、沙箱只读镜像层及动态运行时补丁注入。
+    * **依赖内容**：依赖 `src/types.ts`。
+
+---
+
+### 3. 内置种子技能与资产生态 (`skills/` & `skills-seed/`)
+* **核心功能**：开箱即用的内置种子技能与动态技能物化资产，赋能 Agent 具备广泛的系统运维、办公与开发能力。
+* **对应目录与文件**：
+  * **`skills-seed/`**
+    * **文件功能**：种子技能物化数据资产包，包含预置工具定义、可执行脚本与使用范例说明（如 `google-workspace`、`github` 等）。
+    * **依赖内容**：由核心系统种子初始化逻辑加载并物化至数据库技能库。
+  * **`skills/`**
+    * **文件功能**：内置核心技能库，定义标准技能清单并向智能体编排器暴露安全调用入口。
+    * **依赖内容**：依赖 `src/types.ts`、`src/skills/`。
+
+---
+
+### 4. CI/CD 自动化门控与工作流矩阵 (`.github/workflows/`)
+* **核心功能**：覆盖静态类型分析、全量单元与集成测试分片运行、安全扫描与跨平台发布矩阵。
+* **对应目录与文件**：
+  * **`.github/workflows/ci.yml`**
+    * **文件功能**：持续集成主工作流，分片并行跑通 TypeScript 类型检查、Lint 规范与测试套件。
+    * **依赖内容**：依赖 GitHub Actions 运行环境与矩阵策略。
+  * **`.github/workflows/release.yml`**
+    * **文件功能**：微服务生产镜像构建与 npm/CLI 包发布自动化流水线。
+    * **依赖内容**：依赖多平台容器构建器。
+
+---
+
+### 5. 运维迁移与自动化脚本套件 (`scripts/`)
+* **核心功能**：数据库模式演进、历史数据无损迁移、本地热重载调试与环境准备辅助脚本。
+* **对应目录与文件**：
+  * **`scripts/dev/`**
+    * **文件功能**：本地多服务全栈联调服务监督器（Supervisor），动态监控代码变动并优雅重启进程。
+    * **依赖内容**：依赖 `node:child_process`、`scripts/dev/lib/proc.ts`。
+  * **`scripts/migrate/`**
+    * **文件功能**：数据库迁移脚本，按序号依次幂等执行 SQL 变更并记录版本号。
+    * **依赖内容**：依赖 `src/persistence/pg-pool.ts`。

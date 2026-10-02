@@ -30,15 +30,54 @@ async function pollUntil(cond: () => boolean, tries: number): Promise<boolean> {
   return false;
 }
 
+const isCmd = (c: string) => process.platform === "win32" && (c.endsWith(".cmd") || c.endsWith(".bat"));
+
+function findOnPath(cmd: string): string | undefined {
+  if (cmd.includes("/") || cmd.includes("\\")) return existsSync(cmd) ? cmd : undefined;
+  const paths = (process.env.PATH ?? "").split(process.platform === "win32" ? ";" : ":");
+  for (const p of paths) {
+    if (!p) continue;
+    if (process.platform === "win32") {
+      const full = join(p, cmd);
+      if (existsSync(full + ".cmd")) return full + ".cmd";
+      if (existsSync(full + ".bat")) return full + ".bat";
+      if (existsSync(full + ".exe")) return full + ".exe";
+      if (existsSync(full)) return full;
+    } else {
+      const full = join(p, cmd);
+      if (existsSync(full)) return full;
+    }
+  }
+  return undefined;
+}
+
+export function resolveCommand(cmd: string, args: string[]): { cmd: string; args: string[] } {
+  if (process.platform === "win32") {
+    if (cmd === "npm") return { cmd: "npm.cmd", args };
+    const located = findOnPath(cmd) ?? (existsSync(cmd) ? cmd : undefined);
+    if (located) {
+      if (located.endsWith(".cmd") || located.endsWith(".bat") || located.endsWith(".exe")) {
+        return { cmd: located, args };
+      }
+      return { cmd: process.execPath, args: [located, ...args] };
+    }
+    if (existsSync(cmd + ".cmd")) return { cmd: cmd + ".cmd", args };
+    if (existsSync(cmd + ".bat")) return { cmd: cmd + ".bat", args };
+  }
+  return { cmd, args };
+}
+
 export function capture(
   cmd: string,
   args: string[],
   opts: { cwd?: string; env?: NodeJS.ProcessEnv; allow?: RegExp } = {},
 ): string {
+  const resolved = resolveCommand(cmd, args);
   try {
-    return execFileSync(cmd, args, {
+    return execFileSync(resolved.cmd, resolved.args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
+      ...(isCmd(resolved.cmd) ? { shell: true } : {}),
       ...procOpts(opts),
     });
   } catch (e: unknown) {
@@ -50,16 +89,20 @@ export function capture(
 }
 
 export function captureBoth(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): string {
-  const r = spawnSync(cmd, args, {
+  const resolved = resolveCommand(cmd, args);
+  const r = spawnSync(resolved.cmd, resolved.args, {
     encoding: "utf8",
+    ...(isCmd(resolved.cmd) ? { shell: true } : {}),
     ...procOpts(opts),
   });
   return `${r.stdout ?? ""}${r.stderr ?? ""}`;
 }
 
 export function runInherit(cmd: string, args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): void {
-  execFileSync(cmd, args, {
+  const resolved = resolveCommand(cmd, args);
+  execFileSync(resolved.cmd, resolved.args, {
     stdio: "inherit",
+    ...(isCmd(resolved.cmd) ? { shell: true } : {}),
     ...procOpts(opts),
   });
 }
@@ -69,10 +112,16 @@ export function runInheritAsync(
   args: string[],
   opts: { cwd?: string; env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {},
 ): Promise<void> {
+  const resolved = resolveCommand(cmd, args);
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) return reject(new CliError(`${cmd} cancelled`));
     const grouped = process.platform !== "win32";
-    const child = spawn(cmd, args, { stdio: "inherit", detached: grouped, ...procOpts(opts) });
+    const child = spawn(resolved.cmd, resolved.args, {
+      stdio: "inherit",
+      detached: grouped,
+      ...(isCmd(resolved.cmd) ? { shell: true } : {}),
+      ...procOpts(opts),
+    });
     let cancellation: Promise<void> | undefined;
     const groupAlive = () => {
       if (!child.pid) return false;
@@ -136,8 +185,9 @@ export function spawnBackground(
   args: string[],
   opts: { cwd?: string; env?: NodeJS.ProcessEnv; logFile: string },
 ): number {
+  const resolved = resolveCommand(cmd, args);
   const fd = openSync(opts.logFile, "a");
-  const child = spawn(cmd, args, {
+  const child = spawn(resolved.cmd, resolved.args, {
     detached: true,
     stdio: ["ignore", fd, fd],
     ...procOpts(opts),
@@ -160,7 +210,11 @@ export function streamLabeled(
     };
     for (const { label, command, args } of procs) {
       const tag = label.padEnd(width);
-      const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+      const resolved = resolveCommand(command, args);
+      const child = spawn(resolved.cmd, resolved.args, {
+        stdio: ["ignore", "pipe", "pipe"],
+        ...(isCmd(resolved.cmd) ? { shell: true } : {}),
+      });
       const sink = (): { push: (buf: Buffer) => void; flush: () => void } => {
         let carry = "";
         return {
@@ -353,6 +407,11 @@ export function deploymentSecretValue(name: string, fileValue: string | undefine
 
 export function which(bin: string): boolean {
   try {
+    if (existsSync(bin)) return true;
+    if (process.platform === "win32") {
+      if (existsSync(bin + ".cmd") || existsSync(bin + ".bat") || existsSync(bin + ".exe")) return true;
+      return spawnSync("where.exe", [bin], { stdio: "ignore" }).status === 0;
+    }
     execFileSync("/bin/sh", ["-c", `command -v ${bin}`], { stdio: "ignore" });
     return true;
   } catch {

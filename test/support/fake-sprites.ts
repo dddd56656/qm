@@ -40,6 +40,11 @@ const API_ORIGIN = "https://api.sprites.dev";
 const TOKEN = "test-token";
 export function installFakeSprites(): FakeSprites {
   const root = mkdtempSync(join(tmpdir(), "fake-sprites-")).replace(/\\/g, "/");
+  const binDir = join(root, "bin").replace(/\\/g, "/");
+  if (process.platform === "win32") {
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(join(binDir, "tar"), '#!/bin/sh\nexec /usr/bin/tar --force-local "$@"\n', { mode: 0o755 });
+  }
   const sprites = new Map<string, { home: string }>();
   const policies = new Map<string, NetworkRule[]>();
   const execScripts: string[] = [];
@@ -94,7 +99,7 @@ export function installFakeSprites(): FakeSprites {
       env: {
         ...process.env,
         ...(process.platform === "win32"
-          ? { PATH: `C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
+          ? { PATH: `${binDir};C:/Users/root/AppData/Local/Programs/Python/Python313;${process.env.PATH}` }
           : {}),
         COPYFILE_DISABLE: "1",
         MSYS: "winsymlinks:nativestrict",

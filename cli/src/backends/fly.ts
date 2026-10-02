@@ -11,10 +11,26 @@ import {
   isInvalidSecret,
   promptHidden,
   readEnvFile,
+  resolveCommand,
   settleAll,
   streamLabeled,
   which,
 } from "../util.ts";
+
+function execFly(args: string[], opts?: Parameters<typeof execFileSync>[2]): string {
+  const resolved = resolveCommand(flyBin(), args);
+  return ((execFileSync as Function)(resolved.cmd, resolved.args, opts) ?? "").toString();
+}
+
+function spawnFlySync(args: string[], opts?: Parameters<typeof spawnSync>[2]): ReturnType<typeof spawnSync> {
+  const resolved = resolveCommand(flyBin(), args);
+  return (spawnSync as Function)(resolved.cmd, resolved.args, opts);
+}
+
+function spawnFly(args: string[], opts?: Parameters<typeof spawn>[2]): ReturnType<typeof spawn> {
+  const resolved = resolveCommand(flyBin(), args);
+  return (spawn as Function)(resolved.cmd, resolved.args, opts);
+}
 import {
   isVirtualService,
   ordered,
@@ -78,7 +94,7 @@ function flyRequest(config: QmConfig, method: "GET" | "PUT", body: string): { st
   const command = `node -e "eval(Buffer.from('${encoded}','base64').toString())"`;
   let output: string;
   try {
-    output = execFileSync(flyBin(), ["ssh", "console", "-a", app, "-C", command], {
+    output = execFly(["ssh", "console", "-a", app, "-C", command], {
       encoding: "utf8",
       input: body,
       stdio: ["pipe", "pipe", "pipe"],
@@ -219,7 +235,7 @@ function fly(args: string[], opts: { allow?: RegExp } = {}): string {
 }
 
 function stageSecret(app: string, name: string, value: string): void {
-  const result = spawnSync(flyBin(), ["secrets", "set", "--stage", "-a", app, `${name}=-`], {
+  const result = spawnFlySync(["secrets", "set", "--stage", "-a", app, `${name}=-`], {
     input: value,
     encoding: "utf8",
     stdio: ["pipe", "inherit", "inherit"],
@@ -251,9 +267,9 @@ export function stageFlyEmailAllowlist(
 }
 
 function flySensitive(args: string[], failure: string): string {
-  const result = spawnSync(flyBin(), args, { encoding: "utf8" });
+  const result = spawnFlySync(args, { encoding: "utf8" });
   if (result.status !== 0) throw new CliError(failure);
-  return result.stdout;
+  return String(result.stdout);
 }
 
 const tomlStr = (v: string): string => JSON.stringify(v);
@@ -998,7 +1014,7 @@ async function deployPlugins(
 
 function runFlyDeploy(args: string[], cwd: string): Promise<void> {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(flyBin(), args, { stdio: "inherit", cwd });
+    const child = spawnFly(args, { stdio: "inherit", cwd });
     child.on("error", (err) => reject(new CliError(`fly ${args.join(" ")} failed:\n${err.message}`)));
     child.on("close", (code, signal) => {
       if (code === 0) resolve();
@@ -1299,7 +1315,7 @@ function flyAppNames(config: QmConfig, configDir: string): string[] {
 
 function flyInherit(args: string[]): void {
   try {
-    execFileSync(flyBin(), args, { stdio: "inherit" });
+    execFly(args, { stdio: "inherit" });
   } catch {
     throw new CliError(`fly ${args.join(" ")} failed.`);
   }
@@ -1452,7 +1468,7 @@ export function verifyLocalFlyTokens(config: QmConfig, secrets: ReadonlyMap<stri
       warn(`${name} is not available locally — skipping its live authorization check`);
       return;
     }
-    const result = spawnSync(flyBin(), args, {
+    const result = spawnFlySync(args, {
       encoding: "utf8",
       env: { ...process.env, FLY_API_TOKEN: token },
       stdio: ["ignore", "ignore", "pipe"],
